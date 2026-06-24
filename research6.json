@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://developer.safaricom.co.ke",
+    "name": "Daraja Developer Portal | Safaricom",
+    "snippet": "Daraja 3.0 is a web platform that offers access to Safaricom and M-PESA APIs that creates a bridge for payment integration to web and mobile apps. By connecting ...",
+    "host_name": "developer.safaricom.co.ke",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://elondesigns.com/blog/how-to-integrate-m-pesa-on-your-website-in-kenya-powerful-beginners-guide-to-daraja-apis-2026-edition",
+    "name": "How to Integrate M-Pesa on Your Website in Kenya - Elon Designs",
+    "snippet": "This guide introduces the M-Pesa integration website in the Kenyan ecosystem, focusing on how to get started with Safaricom's Daraja APIs.",
+    "host_name": "elondesigns.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/nairobitechies/comments/1n52ifq/why_is_mpesa_integration_always_so_painful_and",
+    "name": "Why is Mpesa integration always so painful? (and what we're doing",
+    "snippet": "If you've ever tried integrating Mpesa into your app, you probably know the pain: Sandbox works, production doesn't.",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=9ns4VApFxYI",
+    "name": "M-Pesa Integration Made Easy: Daraja API Tutorial - YouTube",
+    "snippet": "This video will guide you through the process of integrating the Daraja API into your website or app, allowing you to create a custom M-Pesa ...",
+    "host_name": "www.youtube.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.tiktok.com/@wencreatives/video/7530617533582314758",
+    "name": "Mpesa Integration with Daraja Portal for Developers - TikTok",
+    "snippet": "How to Register TikTok Business Account While in Kenya · I Have ... Drop your biggest M-Pesa API errors, challenges, or questions below.",
+    "host_name": "www.tiktok.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://paystarafrica.com/m-pesa-integration",
+    "name": "M-PESA Daraja API Integration - Paystar Africa",
+    "snippet": "The Safaricom Daraja API enables businesses to easily integrate their software applications with MPESA. Enable automation of payments verification, ...",
+    "host_name": "paystarafrica.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/eric_muturi/requirements-for-m-pesa-online-payment-setup-in-kenya-2025-guide-2bjl",
+    "name": "Requirements for M-Pesa Online Payment Setup in Kenya (2025",
+    "snippet": "Whether you're following up on your application status, seeking help with Daraja API integration, or confirming your business verification ...",
+    "host_name": "dev.to",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/847761521936648/posts/25636363565983100",
+    "name": "How to link Daraja API to my system in Kenya? - Facebook",
+    "snippet": "Requirements include a registered Kenyan business and a Daraja developer account, with some suggesting alternative platforms like Codian.",
+    "host_name": "www.facebook.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.linkedin.com/pulse/complete-guide-integrating-mpesa-c2b-receive-alerts-payments-thuo-kphef",
+    "name": "Complete guide for integrating MPESA C2B to receive alerts for",
+    "snippet": "Complete guide for integrating MPESA C2B to receive alerts for payments to your paybill/till · Step one: DARAJA ACCOUNT · Step two: Write the code.",
+    "host_name": "www.linkedin.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://business.m-pesa.com/developers",
+    "name": "Developers – Business INFO Portal - M-Pesa",
+    "snippet": "In this web portal, we have exposed API endpoints and provided an automated workflow to easily integrate with the M-Pesa Payments Gateway for accessing and ...",
+    "host_name": "business.m-pesa.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.kra.go.ke/business/etims-electronic-tax-invoice-management-system/learn-about-etims/etims-system-to-system-integration",
+    "name": "eTIMS System to System Integration - KRA",
+    "snippet": "How to Become a Certified 3rd Party Integrator · OSCU Specification document · VSCU Specification document · Step by step guide on how to register in sandbox ...",
+    "host_name": "www.kra.go.ke",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://invoicedataextraction.com/blog/kenya-etims-api-integration-guide",
+    "name": "Kenya eTIMS API Integration Guide - Invoice Data Extraction",
+    "snippet": "Practical guide to Kenya eTIMS API integration covering VSCU vs OSCU selection, KRA sandbox onboarding, integrator choices, and credit-note ...",
+    "host_name": "invoicedataextraction.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/matatashadrack/kra-etims-api-integration",
+    "name": "matatashadrack/kra-etims-api-integration - GitHub",
+    "snippet": "KRA seeks to introduce the usage of Online and Virtual Sales Control Unit (OSCU & VSCU) capable of handling a richer dataset than the traditional Electronic ...",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.kra.go.ke/images/publications/OSCU_VSCU_Step-by-Step_Guide-on-how-to-sign-up.pdf",
+    "name": "[PDF] eTIMS Online Sales Control Unit (OSCU) AND Virtual Sales  - KRA",
+    "snippet": "The VSCU running process, main configurations and technical policies are detailed in the VSCU Specifications document/guide section 2.2. Note that the services ...",
+    "host_name": "www.kra.go.ke",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=p69L4gq3-g4",
+    "name": "KRA eTIMs VSCU API INTEGRATION - YouTube",
+    "snippet": "Welcome to Codestar Technologies Visit our website www.codestar.co.ke https://etims-sbx.kra.go.ke/basic/login/indexLogin Advertise your ...",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.scribd.com/document/836869664/KRA-eTIMS-OSCU-VSCU-Technical-Guide",
+    "name": "eTIMS OSCU & VSCU Setup Guide - Scribd",
+    "snippet": "The document provides a step-by-step guide for the setup and initialization of the eTIMS Online Sales Control Unit (OSCU) and Virtual Sales Control Unit (VSCU) ...",
+    "host_name": "www.scribd.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://softwaredynamicsgroup.com/2023/10/microsoft-dynamics-365-erp-with-kra-etims-system-integration",
+    "name": "Microsoft Dynamics 365 ERP with KRA eTims System Integration",
+    "snippet": "– The integration with KRA eTIMS ensures that businesses can adhere to tax regulations and requirements without manual data entry or complex reconciliations, ...",
+    "host_name": "softwaredynamicsgroup.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://techmoran.com/2023/07/28/how-to-access-kra-etims",
+    "name": "How to access KRA eTIMS - TechMoran",
+    "snippet": "The OSCU is suitable for entities with online invoicing systems, while the VSCU is designed for bulk invoicing entities that may not always ...",
+    "host_name": "techmoran.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.linkedin.com/pulse/what-etims-integration-actually-requires-ronny-nyabuto-qzamf",
+    "name": "What eTIMS Integration Actually Requires - LinkedIn",
+    "snippet": "That mental model works for OSCU, the cloud-side device that KRA manages on their end. It does not work for VSCU. VSCU is a Java JAR that KRA ...",
+    "host_name": "www.linkedin.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.studocu.com/row/document/jomo-kenyatta-university-of-agriculture-and-technology/business-information-technology/oscu-vscu-step-by-step-guide-on-how-to-sign-up/81963478",
+    "name": "OSCU VSCU Sign-Up Process: A Step-by-Step Guide for Users",
+    "snippet": "1. Upon approval of OSCU, a taxpayer will access the OSCU from KRA servers and start · 2. The OSCU running process, main configurations and technical policies ...",
+    "host_name": "www.studocu.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

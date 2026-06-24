@@ -19,6 +19,8 @@ export const translations = {
       suppliers: 'Suppliers',
       customers: 'Customers',
       mpesa: 'M-Pesa',
+      reports: 'Reports',
+      'expense-check': 'Expense Check',
       settings: 'Settings',
     },
     
@@ -68,6 +70,7 @@ export const translations = {
       paymentMethod: 'Payment Method',
       cash: 'Cash',
       mpesa: 'M-Pesa',
+      bank_transfer: 'Bank Transfer',
       bankTransfer: 'Bank Transfer',
       credit: 'Credit',
       payWithMpesa: 'Pay with M-Pesa',
@@ -277,6 +280,8 @@ export const translations = {
       suppliers: 'Wasambazaji',
       customers: 'Wateja',
       mpesa: 'M-Pesa',
+      reports: 'Ripoti',
+      'expense-check': 'Uthibitisho wa Matumizi',
       settings: 'Mipangilio',
     },
     
@@ -326,6 +331,7 @@ export const translations = {
       paymentMethod: 'Njia ya Malipo',
       cash: 'Pesa Taslimu',
       mpesa: 'M-Pesa',
+      bank_transfer: 'Ham ya Benki',
       bankTransfer: 'Ham ya Benki',
       credit: 'Mkopo',
       payWithMpesa: 'Lipa kwa M-Pesa',
