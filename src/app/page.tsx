@@ -11,6 +11,7 @@ import {
   FileSpreadsheet, CircleDollarSign, Activity, BoxIcon
 } from 'lucide-react';
 import { translations, formatCurrency, type Locale } from '@/lib/i18n';
+import POSView from '@/components/POSView';
 
 // ============================================
 // TYPES
@@ -171,7 +172,6 @@ export default function SokoniPOS() {
 
   // POS state
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [posSearch, setPosSearch] = useState('');
   const [showBuyerFields, setShowBuyerFields] = useState(false);
   const [buyerPin, setBuyerPin] = useState('');
   const [buyerName, setBuyerName] = useState('');
@@ -210,18 +210,6 @@ export default function SokoniPOS() {
   const [showCreditNote, setShowCreditNote] = useState(false);
   const [creditNoteInvoice, setCreditNoteInvoice] = useState<Invoice | null>(null);
   const [creditNoteType, setCreditNoteType] = useState<'credit_note' | 'debit_note'>('credit_note');
-
-  // POS advanced features state
-  const [posTab, setPosTab] = useState<'grid' | 'quick' | 'recent'>('grid');
-  const [heldCarts, setHeldCarts] = useState<{ id: string; name: string; items: CartItem[]; createdAt: Date }[]>([]);
-  const [showRecallModal, setShowRecallModal] = useState(false);
-  const [showCashTender, setShowCashTender] = useState(false);
-  const [cashTendered, setCashTendered] = useState('');
-  const [showSplitPay, setShowSplitPay] = useState(false);
-  const [splitCash, setSplitCash] = useState('');
-  const [splitMpesa, setSplitMpesa] = useState('');
-  const [splitMpesaPhone, setSplitMpesaPhone] = useState('');
-  const [recentItems, setRecentItems] = useState<Product[]>([]);
 
   // Effects
   useEffect(() => { document.documentElement.classList.toggle('dark', isDark); }, [isDark]);
@@ -671,98 +659,30 @@ export default function SokoniPOS() {
   // ============================================
   // RENDER: POS (unchanged logic, better visuals)
   // ============================================
-  const renderPOS = () => {
-    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(posSearch.toLowerCase()) || p.sku?.toLowerCase().includes(posSearch.toLowerCase()));
-    const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
-    return (
-      <div className="pos-grid">
-        <div className="space-y-4 overflow-y-auto">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input type="text" placeholder={t(locale, 'pos.searchProducts')} value={posSearch} onChange={e => setPosSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setPosSearch('')} className={`px-3 py-1 text-xs rounded-full border transition ${posSearch === '' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>All</button>
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setPosSearch(cat || '')} className={`px-3 py-1 text-xs rounded-full border transition ${posSearch === cat ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>{cat}</button>
-            ))}
-          </div>
-          {products.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground"><Package className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'pos.noProducts')}</p></div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredProducts.map(product => (
-                <button key={product.id} onClick={() => addToCart(product)}
-                  className="bg-card border border-border rounded-xl p-3 text-left hover:border-primary hover:shadow-lg hover:shadow-primary/5 transition-all active:scale-[0.97]">
-                  <div className="flex items-start justify-between">
-                    <p className="font-medium text-sm truncate flex-1">{product.name}</p>
-                    {product.quantity <= product.reorderLevel && <AlertTriangle className="w-3 h-3 text-yellow-500 shrink-0 ml-1" />}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{product.sku}</p>
-                  <div className="flex items-baseline justify-between mt-2">
-                    <p className="text-primary font-bold">{formatCurrency(product.unitPrice)}</p>
-                    <p className="text-[10px] text-muted-foreground">{product.quantity} left</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="bg-card border border-border rounded-xl flex flex-col h-full">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-primary" /> {t(locale, 'pos.cart')} {cart.length > 0 && <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">{cart.length}</span>}</h2>
-            {cart.length > 0 && <button onClick={() => setCart([])} className="text-xs text-muted-foreground hover:text-destructive">{t(locale, 'pos.clearCart')}</button>}
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {cart.length === 0 ? <p className="text-center text-muted-foreground py-8">{t(locale, 'pos.emptyCart')}</p> : cart.map(item => (
-              <div key={item.product.id} className="flex items-center gap-2 bg-muted rounded-lg p-2.5">
-                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.product.name}</p><p className="text-xs text-muted-foreground">{formatCurrency(item.product.unitPrice)} x {item.quantity}</p></div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => updateCartQty(item.product.id, item.quantity - 1)} className="w-7 h-7 flex items-center justify-center rounded bg-card border border-border text-sm hover:bg-muted">-</button>
-                  <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                  <button onClick={() => updateCartQty(item.product.id, item.quantity + 1)} className="w-7 h-7 flex items-center justify-center rounded bg-card border border-border text-sm hover:bg-muted">+</button>
-                </div>
-                <p className="font-semibold text-sm w-20 text-right">{formatCurrency(item.product.unitPrice * item.quantity)}</p>
-                <button onClick={() => removeFromCart(item.product.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-border p-4 space-y-3">
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(cartSubtotal)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span>{formatCurrency(cartVat)}</span></div>
-              <div className="flex justify-between font-bold text-lg pt-1 border-t border-border"><span>Total</span><span className="text-primary">{formatCurrency(cartTotal)}</span></div>
-            </div>
-            <button onClick={() => setShowBuyerFields(!showBuyerFields)} className="w-full text-left text-xs text-primary hover:underline flex items-center gap-1">
-              <ChevronRight className={`w-3 h-3 transition-transform ${showBuyerFields ? 'rotate-90' : ''}`} />{t(locale, 'pos.addBuyer')}
-            </button>
-            {showBuyerFields && (
-              <div className="space-y-2 p-3 bg-muted rounded-lg">
-                <div><label className="text-xs text-muted-foreground">{t(locale, 'pos.buyerPin')}</label><div className="flex gap-1"><input type="text" value={buyerPin} onChange={e => setBuyerPin(e.target.value.toUpperCase())} placeholder="A001234567B" maxLength={11} className="flex-1 px-2 py-1.5 text-sm bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary" /><button onClick={() => validatePin(buyerPin)} className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:opacity-90">{t(locale, 'pos.validatePin')}</button></div></div>
-                <div><label className="text-xs text-muted-foreground">{t(locale, 'pos.buyerName')}</label><input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Company Name" className="w-full px-2 py-1.5 text-sm bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary" /></div>
-              </div>
-            )}
-            <div>
-              <label className="text-xs text-muted-foreground">{t(locale, 'pos.paymentMethod')}</label>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                {['cash', 'mpesa', 'bank_transfer', 'credit'].map(method => (
-                  <button key={method} onClick={() => setPaymentMethod(method)} className={`px-3 py-2 text-xs rounded-lg border transition ${paymentMethod === method ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>{t(locale, `pos.${method}` as any)}</button>
-                ))}
-              </div>
-            </div>
-            {paymentMethod === 'mpesa' && (
-              <div className="space-y-2"><div><label className="text-xs text-muted-foreground">{t(locale, 'pos.mpesaPhone')}</label><input type="tel" value={mpesaPhone} onChange={e => setMpesaPhone(e.target.value)} placeholder="254712345678" className="w-full px-2 py-1.5 text-sm bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary" /></div>
-                <button onClick={initiateMpesaPayment} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center justify-center gap-2"><Phone className="w-4 h-4" /> {t(locale, 'pos.initiatePayment')}</button></div>
-            )}
-            <button onClick={generateInvoice} disabled={cart.length === 0} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
-              <Receipt className="w-5 h-5" /> {t(locale, 'pos.generateInvoice')}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderPOS = () => (
+    <POSView
+      locale={locale}
+      products={products}
+      cart={cart}
+      setCart={setCart}
+      showBuyerFields={showBuyerFields}
+      setShowBuyerFields={setShowBuyerFields}
+      buyerPin={buyerPin}
+      setBuyerPin={setBuyerPin}
+      buyerName={buyerName}
+      setBuyerName={setBuyerName}
+      paymentMethod={paymentMethod}
+      setPaymentMethod={setPaymentMethod}
+      mpesaPhone={mpesaPhone}
+      setMpesaPhone={setMpesaPhone}
+      selectedCustomer={selectedCustomer}
+      setSelectedCustomer={setSelectedCustomer}
+      onGenerateInvoice={generateInvoice}
+      onInitiateMpesa={initiateMpesaPayment}
+      onValidatePin={validatePin}
+      onToast={showToast}
+    />
+  );
 
   // ============================================
   // RENDER: INVOICES (with search + receipt preview)
