@@ -52,3 +52,10 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Project-specific
+tool-results/
+research*.json
+pos_research*.json
+db/
+MARKET_RESEARCH_ANALYSIS.md
