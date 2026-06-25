@@ -22,3 +22,29 @@ Stage Summary:
 - Two-way compliance: sales invoices + purchase recording
 - Buyer PIN validation for B2B invoices
 - Freemium pricing tiers (Free/Growth/Pro)
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add advanced POS features (Quick Keys, Split Pay, Hold/Recall, Barcode Scanner) and push to new GitHub repo
+
+Work Log:
+- Created POSView.tsx as a separate component (extracted from 1458-line page.tsx)
+- Implemented Quick Keys tab: top seller speed buttons, quantity multipliers (x2, x3, x5, x10), discount button
+- Implemented Split Payment modal: cash + M-Pesa split with validation, 50/50 quick split, all-cash/all-mpesa buttons
+- Implemented Quick Cash Tender modal: change calculation, quick amount rounding buttons (to 50/100/500), exact amount button
+- Implemented Hold/Recall Cart: name and hold current cart, recall later, auto-hold if recalling with items in cart, discard held orders
+- Implemented Barcode Scanner: toggle scanner input, Enter key to match SKU/itemCode/name, auto-add to cart
+- Implemented Recent Items tab: tracks last 12 items added for quick re-add
+- Added stock level indicator on hover in product grid
+- Added category filter pills
+- Cleaned up page.tsx: removed unused posSearch, posTab, heldCarts, etc. state variables
+- Updated .gitignore with tool-results/, research files, db/
+- Created new GitHub repo: sokoni-pos (renamed from parcy-pos)
+- Pushed all code to https://github.com/ssmurfgg04-gif/sokoni-pos
+
+Stage Summary:
+- POSView component with 6 advanced features fully implemented
+- App compiles and runs successfully (200 response on dev server)
+- Code pushed to new GitHub repo: https://github.com/ssmurfgg04-gif/sokoni-pos
+- Clean .gitignore removing temp/research files from tracking
