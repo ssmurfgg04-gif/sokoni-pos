@@ -1,4 +1,4 @@
-// Parcy POS - KRA eTIMS Integration Service
+// Sokoni POS - KRA eTIMS Integration Service
 // Sandbox implementation with offline-first queue & retry logic
 
 import { db } from './db';

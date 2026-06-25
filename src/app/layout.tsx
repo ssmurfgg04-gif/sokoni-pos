@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Parcy - KRA eTIMS Compliant POS",
+  title: "Sokoni - KRA eTIMS Compliant POS",
   description: "Kenya's smartest point-of-sale system. KRA eTIMS compliant, M-Pesa native, offline-first POS for Kenyan businesses.",
   manifest: "/manifest.json",
-  applicationName: "Parcy POS",
+  applicationName: "Sokoni POS",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Parcy POS",
+    title: "Sokoni POS",
   },
 };
 

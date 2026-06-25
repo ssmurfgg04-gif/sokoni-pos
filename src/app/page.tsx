@@ -148,7 +148,7 @@ function ProgressRing({ value, size = 80, strokeWidth = 6, color }: { value: num
 // ============================================
 // MAIN APP
 // ============================================
-export default function ParcyPOS() {
+export default function SokoniPOS() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [locale, setLocale] = useState<Locale>('en');
   const [businessId, setBusinessId] = useState<string>('');
@@ -211,6 +211,18 @@ export default function ParcyPOS() {
   const [creditNoteInvoice, setCreditNoteInvoice] = useState<Invoice | null>(null);
   const [creditNoteType, setCreditNoteType] = useState<'credit_note' | 'debit_note'>('credit_note');
 
+  // POS advanced features state
+  const [posTab, setPosTab] = useState<'grid' | 'quick' | 'recent'>('grid');
+  const [heldCarts, setHeldCarts] = useState<{ id: string; name: string; items: CartItem[]; createdAt: Date }[]>([]);
+  const [showRecallModal, setShowRecallModal] = useState(false);
+  const [showCashTender, setShowCashTender] = useState(false);
+  const [cashTendered, setCashTendered] = useState('');
+  const [showSplitPay, setShowSplitPay] = useState(false);
+  const [splitCash, setSplitCash] = useState('');
+  const [splitMpesa, setSplitMpesa] = useState('');
+  const [splitMpesaPhone, setSplitMpesaPhone] = useState('');
+  const [recentItems, setRecentItems] = useState<Product[]>([]);
+
   // Effects
   useEffect(() => { document.documentElement.classList.toggle('dark', isDark); }, [isDark]);
   useEffect(() => {
@@ -226,7 +238,7 @@ export default function ParcyPOS() {
     try {
       const res = await fetch('/api/seed', { method: 'POST' });
       const data = await res.json();
-      if (data.businessId) { setBusinessId(data.businessId); setIsSeeded(true); setShowWelcome(true); showToast('Welcome to Parcy! Demo data loaded.', 'success'); }
+      if (data.businessId) { setBusinessId(data.businessId); setIsSeeded(true); setShowWelcome(true); showToast('Welcome to Sokoni! Demo data loaded.', 'success'); }
       else if (data.message && data.businessId) { setBusinessId(data.businessId); setIsSeeded(true); }
     } catch { showToast('Failed to seed database', 'error'); }
   }, []);
@@ -273,7 +285,7 @@ export default function ParcyPOS() {
   const initiateMpesaPayment = async () => {
     if (!mpesaPhone || !businessId) return;
     try {
-      const res = await fetch('/api/mpesa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stk_push', phoneNumber: mpesaPhone, amount: cartTotal, businessId, accountReference: `POS-${Date.now()}`, transactionDesc: 'Parcy POS Payment' }) });
+      const res = await fetch('/api/mpesa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stk_push', phoneNumber: mpesaPhone, amount: cartTotal, businessId, accountReference: `POS-${Date.now()}`, transactionDesc: 'Sokoni POS Payment' }) });
       const data = await res.json();
       if (data.success) { showToast('M-Pesa STK push sent! Check your phone.', 'success'); setPaymentMethod('mpesa'); }
       else showToast(data.error || 'M-Pesa failed', 'error');
@@ -317,7 +329,7 @@ export default function ParcyPOS() {
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
             <Store className="w-10 h-10 text-white" />
           </div>
-          <h2 className="text-2xl font-bold">Welcome to Parcy POS</h2>
+          <h2 className="text-2xl font-bold">Welcome to Sokoni POS</h2>
           <p className="text-muted-foreground">Kenya&apos;s smartest KRA eTIMS compliant point-of-sale. Your demo store is loaded with sample products, customers, and invoices.</p>
           <div className="grid grid-cols-2 gap-3 text-left text-sm">
             <div className="bg-muted rounded-lg p-3"><CheckCircle className="w-4 h-4 text-green-500 mb-1" /><p className="font-medium">KRA eTIMS Sync</p><p className="text-xs text-muted-foreground">Auto-sync invoices to KRA</p></div>
@@ -378,7 +390,7 @@ export default function ParcyPOS() {
   const renderReceiptPreview = (inv: Invoice) => (
     <div className="invoice-receipt bg-white text-black text-xs space-y-2 print-area">
       <div className="text-center border-b border-dashed border-gray-400 pb-2">
-        <p className="font-bold text-sm">PARCY DEMO STORE</p>
+        <p className="font-bold text-sm">SOKONI DEMO STORE</p>
         <p>Moi Avenue, Nairobi</p>
         <p>PIN: A001234567B</p>
         <p className="font-bold mt-1">E-TIMS RECEIPT</p>
@@ -433,7 +445,7 @@ export default function ParcyPOS() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
               <Store className="w-6 h-6 text-white" />
             </div>
-            <div><h1 className="text-lg font-bold">Parcy</h1><p className="text-[10px] text-muted-foreground tracking-wide uppercase">KRA eTIMS POS</p></div>
+            <div><h1 className="text-lg font-bold">Sokoni</h1><p className="text-[10px] text-muted-foreground tracking-wide uppercase">KRA eTIMS POS</p></div>
           </div>
         </div>
         <div className={`px-4 py-2 text-xs flex items-center gap-2 font-medium ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -649,7 +661,7 @@ export default function ParcyPOS() {
             <button onClick={() => setCurrentView('purchases')} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Package className="w-4 h-4" /> Record Purchase</button>
             <button onClick={async () => { await fetch('/api/kra/sync?action=process_queue&businessId=' + businessId, { method: 'POST' }); fetchDashboard(); showToast('Sync queue processed', 'success'); }} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><RefreshCw className="w-4 h-4" /> Sync Now</button>
             <button onClick={() => setCurrentView('reports')} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Activity className="w-4 h-4" /> Reports</button>
-            <button onClick={async () => { const csvRows = [['Invoice#','Buyer','Amount','Status','Date']]; invoices.forEach(i => csvRows.push([i.invoiceNumber, i.buyerName || 'Walk-in', String(i.totalAmount), i.status, new Date(i.createdAt).toLocaleDateString()])); const blob = new Blob([csvRows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `parcy-invoices-${Date.now()}.csv`; a.click(); showToast('CSV exported!', 'success'); }} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Download className="w-4 h-4" /> Export CSV</button>
+            <button onClick={async () => { const csvRows = [['Invoice#','Buyer','Amount','Status','Date']]; invoices.forEach(i => csvRows.push([i.invoiceNumber, i.buyerName || 'Walk-in', String(i.totalAmount), i.status, new Date(i.createdAt).toLocaleDateString()])); const blob = new Blob([csvRows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `sokoni-invoices-${Date.now()}.csv`; a.click(); showToast('CSV exported!', 'success'); }} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Download className="w-4 h-4" /> Export CSV</button>
           </div>
         </div>
       </div>
@@ -1043,7 +1055,7 @@ export default function ParcyPOS() {
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between"><h2 className="text-xl font-bold">Reports & Analytics</h2>
-          <button onClick={async () => { const csvRows = [['Type','Description','Amount','VAT','Date']]; invoices.filter(i => i.status !== 'cancelled').forEach(i => csvRows.push(['Sale', i.invoiceNumber, String(i.totalAmount), String(i.totalVat), new Date(i.createdAt).toLocaleDateString()])); purchases.forEach(p => csvRows.push(['Purchase', p.description, String(p.totalAmount), String(p.totalVat), new Date(p.purchaseDate).toLocaleDateString()])); const blob = new Blob([csvRows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `parcy-report-${Date.now()}.csv`; a.click(); showToast('Report exported!', 'success'); }} className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Download className="w-4 h-4" /> Export CSV</button>
+          <button onClick={async () => { const csvRows = [['Type','Description','Amount','VAT','Date']]; invoices.filter(i => i.status !== 'cancelled').forEach(i => csvRows.push(['Sale', i.invoiceNumber, String(i.totalAmount), String(i.totalVat), new Date(i.createdAt).toLocaleDateString()])); purchases.forEach(p => csvRows.push(['Purchase', p.description, String(p.totalAmount), String(p.totalVat), new Date(p.purchaseDate).toLocaleDateString()])); const blob = new Blob([csvRows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `sokoni-report-${Date.now()}.csv`; a.click(); showToast('Report exported!', 'success'); }} className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Download className="w-4 h-4" /> Export CSV</button>
         </div>
 
         <div className="flex gap-2 border-b border-border pb-1">

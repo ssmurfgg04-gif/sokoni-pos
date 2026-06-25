@@ -1,0 +1,1446 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck, CreditCard, Settings,
+     6→  Plus, Search, RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, Wifi, WifiOff,
+     7→  ChevronRight, Trash2, X, Edit2, Save, AlertCircle, ArrowRight, Menu, Globe,
+     8→  TrendingUp, DollarSign, Receipt, Shield, BarChart3, Zap, Phone, QrCode, Copy,
+     9→  ChevronDown, Eye, RotateCcw, Bell, Moon, Sun, Store, MapPin, Download, Printer,
+    10→  ArrowUpRight, ArrowDownRight, Minus, Wallet, PiggyBank, Calendar, Target,
+    11→  FileSpreadsheet, CircleDollarSign, Activity, BoxIcon
+    12→} from 'lucide-react';
+    13→import { translations, formatCurrency, type Locale } from '@/lib/i18n';
+    14→
+    15→// ============================================
+    16→// TYPES
+    17→// ============================================
+    18→type View = 'dashboard' | 'pos' | 'invoices' | 'purchases' | 'products' | 'suppliers' | 'customers' | 'mpesa' | 'reports' | 'expense-check' | 'settings';
+    19→
+    20→interface Product {
+    21→  id: string; name: string; sku?: string; category?: string; unitPrice: number;
+    22→  costPrice?: number; vatRate: number; vatType: string; quantity: number;
+    23→  reorderLevel: number; itemCode?: string; itemClassCode?: string; unitOfMeasure?: string; isActive: boolean;
+    24→}
+    25→
+    26→interface CartItem { product: Product; quantity: number; }
+    27→
+    28→interface Invoice {
+    29→  id: string; invoiceNumber: string; buyerPin?: string; buyerName?: string;
+    30→  buyerAddress?: string; subtotal: number; totalVat: number; totalAmount: number;
+    31→  paymentMethod: string; status: string; kraSignature?: string; kraControlNumber?: string;
+    32→  kraQrCodeData?: string; retryCount: number; lastError?: string; createdAt: string;
+    33→  items: any[]; mpesaReceiptNumber?: string; discountAmount?: number; localTimestamp?: string;
+    34→  issueDate?: string; invoiceType?: string; relatedInvoiceId?: string;
+    35→  _originalInvoice?: { id: string; invoiceNumber: string; totalAmount: number };
+    36→}
+    37→
+    38→interface Customer {
+    39→  id: string; name: string; kraPin?: string; email?: string; phone?: string;
+    40→  address?: string; isVatRegistered: boolean;
+    41→}
+    42→
+    43→interface Supplier {
+    44→  id: string; name: string; kraPin?: string; email?: string; phone?: string;
+    45→  address?: string; isEtimesCompliant: boolean; _count?: { purchases: number };
+    46→}
+    47→
+    48→interface PurchaseRecord {
+    49→  id: string; supplierName: string; supplierPin?: string; description: string;
+    50→  totalAmount: number; totalVat: number; purchaseDate: string; paymentMethod: string;
+    51→  isEtimesCompliant: boolean; buyerInitiated: boolean; notes?: string; kraReference?: string;
+    52→  supplier?: { id: string; name: string; isEtimesCompliant: boolean };
+    53→}
+    54→
+    55→interface MpesaTransaction {
+    56→  id: string; mpesaReceipt?: string; phoneNumber: string; amount: number;
+    57→  status: string; reconciled: boolean; createdAt: string; accountReference?: string;
+    58→  invoice?: { id: string; invoiceNumber: string; totalAmount: number };
+    59→}
+    60→
+    61→interface DashboardData {
+    62→  sales: { totalSales: number; totalVat: number; todaySales: number; weekSales: number; invoiceCount: number; averageInvoiceValue: number; paymentBreakdown: { cash: number; mpesa: number; bank: number; credit: number } };
+    63→  sync: { queued: number; syncing: number; synced: number; failed: number; total: number; syncRate: number };
+    64→  purchases: { total: number; inputVat: number; count: number; compliant: number; nonCompliant: number; complianceRate: number };
+    65→  mpesa: { totalTransactions: number; totalAmount: number; reconciled: number; reconciliationRate: number };
+    66→  compliance: { score: number; status: string };
+    67→  recent: { invoices: any[]; purchases: any[] };
+    68→  alerts: { lowStock: any[]; failedSyncs: number; nonCompliantPurchases: number };
+    69→  dailyTrend: { date: string; sales: number; invoices: number }[];
+    70→  vatReturn: { vatPayable: number; vatRecoverable: number; netVat: number; period: string };
+    71→  profitLoss: { revenue: number; costOfGoods: number; grossProfit: number; grossProfitMargin: number; netVat: number };
+    72→  topProducts: { id: string; name: string; category: string; quantity: number; revenue: number }[];
+    73→  notifications: { id: string; type: 'error' | 'warning' | 'info'; title: string; message: string; time: string; action?: string }[];
+    74→}
+    75→
+    76→function t(locale: Locale, path: string): string {
+    77→  const keys = path.split('.');
+    78→  let current: any = translations[locale];
+    79→  for (const key of keys) {
+    80→    if (current && typeof current === 'object' && key in current) { current = current[key]; }
+    81→    else { let fb: any = translations.en; for (const k of keys) { if (fb && typeof fb === 'object' && k in fb) { fb = fb[k]; } else return path; } return typeof fb === 'string' ? fb : path; }
+    82→  }
+    83→  return typeof current === 'string' ? current : path;
+    84→}
+    85→
+    86→// ============================================
+    87→// STATUS BADGE
+    88→// ============================================
+    89→function StatusBadge({ status }: { status: string }) {
+    90→  const config: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+    91→    synced: { label: 'Synced', className: 'status-synced', icon: <CheckCircle className="w-3 h-3" /> },
+    92→    queued: { label: 'Queued', className: 'status-queued', icon: <Clock className="w-3 h-3" /> },
+    93→    syncing: { label: 'Syncing', className: 'status-syncing syncing-pulse', icon: <RefreshCw className="w-3 h-3 animate-spin" /> },
+    94→    failed: { label: 'Failed', className: 'status-failed', icon: <XCircle className="w-3 h-3" /> },
+    95→    draft: { label: 'Draft', className: 'status-draft', icon: <Edit2 className="w-3 h-3" /> },
+    96→    cancelled: { label: 'Cancelled', className: 'status-cancelled', icon: <X className="w-3 h-3" /> },
+    97→    completed: { label: 'Complete', className: 'status-synced', icon: <CheckCircle className="w-3 h-3" /> },
+    98→    pending: { label: 'Pending', className: 'status-queued', icon: <Clock className="w-3 h-3" /> },
+    99→    processing: { label: 'Processing', className: 'status-syncing', icon: <RefreshCw className="w-3 h-3 animate-spin" /> },
+   100→  };
+   101→  const c = config[status] || config.draft;
+   102→  return (
+   103→    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.className}`}>
+   104→      {c.icon} {c.label}
+   105→    </span>
+   106→  );
+   107→}
+   108→
+   109→// ============================================
+   110→// MINI BAR CHART (pure CSS, no library needed)
+   111→// ============================================
+   112→function MiniBarChart({ data, maxValue, color = 'bg-primary' }: { data: number[]; maxValue: number; color?: string }) {
+   113→  return (
+   114→    <div className="flex items-end gap-1 h-16">
+   115→      {data.map((val, i) => {
+   116→        const height = maxValue > 0 ? Math.max((val / maxValue) * 100, 2) : 2;
+   117→        return (
+   118→          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+   119→            <div className="w-full relative group">
+   120→              <div className={`w-full ${color} rounded-t-sm transition-all duration-500`} style={{ height: `${height}px` }} />
+   121→              <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+   122→                {formatCurrency(val)}
+   123→              </div>
+   124→            </div>
+   125→          </div>
+   126→        );
+   127→      })}
+   128→    </div>
+   129→  );
+   130→}
+   131→
+   132→// ============================================
+   133→// PROGRESS RING (for compliance score)
+   134→// ============================================
+   135→function ProgressRing({ value, size = 80, strokeWidth = 6, color }: { value: number; size?: number; strokeWidth?: number; color: string }) {
+   136→  const radius = (size - strokeWidth) / 2;
+   137→  const circumference = radius * 2 * Math.PI;
+   138→  const offset = circumference - (value / 100) * circumference;
+   139→  return (
+   140→    <svg width={size} height={size} className="-rotate-90">
+   141→      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-muted/30" />
+   142→      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
+   143→        strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-1000" />
+   144→    </svg>
+   145→  );
+   146→}
+   147→
+   148→// ============================================
+   149→// MAIN APP
+   150→// ============================================
+   151→export default function ParcyPOS() {
+   152→  const [currentView, setCurrentView] = useState<View>('dashboard');
+   153→  const [locale, setLocale] = useState<Locale>('en');
+   154→  const [businessId, setBusinessId] = useState<string>('');
+   155→  const [isDark, setIsDark] = useState(false);
+   156→  const [sidebarOpen, setSidebarOpen] = useState(false);
+   157→  const [isOnline, setIsOnline] = useState(true);
+   158→  const [isSeeded, setIsSeeded] = useState(false);
+   159→  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+   160→  const [showNotifications, setShowNotifications] = useState(false);
+   161→  const [showWelcome, setShowWelcome] = useState(false);
+   162→
+   163→  // Data state
+   164→  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+   165→  const [products, setProducts] = useState<Product[]>([]);
+   166→  const [invoices, setInvoices] = useState<Invoice[]>([]);
+   167→  const [customers, setCustomers] = useState<Customer[]>([]);
+   168→  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+   169→  const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
+   170→  const [mpesaTransactions, setMpesaTransactions] = useState<MpesaTransaction[]>([]);
+   171→
+   172→  // POS state
+   173→  const [cart, setCart] = useState<CartItem[]>([]);
+   174→  const [posSearch, setPosSearch] = useState('');
+   175→  const [showBuyerFields, setShowBuyerFields] = useState(false);
+   176→  const [buyerPin, setBuyerPin] = useState('');
+   177→  const [buyerName, setBuyerName] = useState('');
+   178→  const [paymentMethod, setPaymentMethod] = useState('cash');
+   179→  const [mpesaPhone, setMpesaPhone] = useState('');
+   180→  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+   181→
+   182→  // Invoices state
+   183→  const [invoiceFilter, setInvoiceFilter] = useState('all');
+   184→  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+   185→  const [invoiceSearch, setInvoiceSearch] = useState('');
+   186→
+   187→  // Purchases state
+   188→  const [showNewPurchase, setShowNewPurchase] = useState(false);
+   189→  const [newPurchase, setNewPurchase] = useState({ supplierName: '', supplierPin: '', description: '', totalAmount: '', totalVat: '0', category: 'Food', paymentMethod: 'cash', isEtimesCompliant: false, buyerInitiated: false, notes: '' });
+   190→
+   191→  // Products state
+   192→  const [showNewProduct, setShowNewProduct] = useState(false);
+   193→  const [newProduct, setNewProduct] = useState({ name: '', sku: '', category: 'Food', unitPrice: '', costPrice: '', vatRate: '16', vatType: 'VAT', quantity: '0', itemCode: '', itemClassCode: '', unitOfMeasure: 'PCE' });
+   194→
+   195→  // Suppliers state
+   196→  const [showNewSupplier, setShowNewSupplier] = useState(false);
+   197→  const [newSupplier, setNewSupplier] = useState({ name: '', kraPin: '', phone: '', email: '', address: '', isEtimesCompliant: false });
+   198→
+   199→  // Customers state
+   200→  const [showNewCustomer, setShowNewCustomer] = useState(false);
+   201→  const [newCustomer, setNewCustomer] = useState({ name: '', kraPin: '', phone: '', email: '', address: '', isVatRegistered: false });
+   202→
+   203→  // Reports state
+   204→  const [reportTab, setReportTab] = useState<'sales' | 'vat' | 'pnl' | 'products'>('sales');
+   205→
+   206→  // Expense validation state
+   207→  const [expenseValidation, setExpenseValidation] = useState<any>(null);
+   208→
+   209→  // Credit note modal state
+   210→  const [showCreditNote, setShowCreditNote] = useState(false);
+   211→  const [creditNoteInvoice, setCreditNoteInvoice] = useState<Invoice | null>(null);
+   212→  const [creditNoteType, setCreditNoteType] = useState<'credit_note' | 'debit_note'>('credit_note');
+   213→
+   214→  // Effects
+   215→  useEffect(() => { document.documentElement.classList.toggle('dark', isDark); }, [isDark]);
+   216→  useEffect(() => {
+   217→    const on = () => setIsOnline(true), off = () => setIsOnline(false);
+   218→    window.addEventListener('online', on); window.addEventListener('offline', off);
+   219→    setIsOnline(navigator.onLine);
+   220→    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+   221→  }, []);
+   222→  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t); } }, [toast]);
+   223→
+   224→  // Seed
+   225→  const seedDatabase = useCallback(async () => {
+   226→    try {
+   227→      const res = await fetch('/api/seed', { method: 'POST' });
+   228→      const data = await res.json();
+   229→      if (data.businessId) { setBusinessId(data.businessId); setIsSeeded(true); setShowWelcome(true); showToast('Welcome to Parcy! Demo data loaded.', 'success'); }
+   230→      else if (data.message && data.businessId) { setBusinessId(data.businessId); setIsSeeded(true); }
+   231→    } catch { showToast('Failed to seed database', 'error'); }
+   232→  }, []);
+   233→  useEffect(() => { if (!isSeeded) seedDatabase(); }, [isSeeded, seedDatabase]);
+   234→
+   235→  // Fetchers
+   236→  const fetchDashboard = useCallback(async () => { if (!businessId) return; try { const r = await fetch(`/api/dashboard?businessId=${businessId}`); const d = await r.json(); if (r.ok) setDashboard(d); } catch {} }, [businessId]);
+   237→  const fetchProducts = useCallback(async () => { if (!businessId) return; try { const r = await fetch(`/api/products?businessId=${businessId}`); setProducts(await r.json()); } catch {} }, [businessId]);
+   238→  const fetchInvoices = useCallback(async (status?: string) => { if (!businessId) return; try { const url = `/api/invoices?businessId=${businessId}${status && status !== 'all' ? `&status=${status}` : ''}`; setInvoices(await (await fetch(url)).json()); } catch {} }, [businessId]);
+   239→  const fetchCustomers = useCallback(async () => { if (!businessId) return; try { setCustomers(await (await fetch(`/api/customers?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+   240→  const fetchSuppliers = useCallback(async () => { if (!businessId) return; try { setSuppliers(await (await fetch(`/api/suppliers?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+   241→  const fetchPurchases = useCallback(async () => { if (!businessId) return; try { setPurchases(await (await fetch(`/api/purchases?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+   242→  const fetchMpesa = useCallback(async () => { if (!businessId) return; try { setMpesaTransactions(await (await fetch(`/api/mpesa?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+   243→
+   244→  useEffect(() => {
+   245→    if (!businessId) return;
+   246→    const f: Record<string, () => void> = { dashboard: fetchDashboard, pos: fetchProducts, invoices: () => fetchInvoices(), purchases: fetchPurchases, products: fetchProducts, suppliers: fetchSuppliers, customers: fetchCustomers, mpesa: fetchMpesa, reports: fetchDashboard, 'expense-check': async () => { await fetchDashboard(); try { const r = await fetch(`/api/expenses/validate?businessId=${businessId}`); const d = await r.json(); if (r.ok) setExpenseValidation(d); } catch {} }, settings: () => {} };
+   247→    f[currentView]?.();
+   248→  }, [currentView, businessId, fetchDashboard, fetchProducts, fetchInvoices, fetchPurchases, fetchSuppliers, fetchCustomers, fetchMpesa]);
+   249→
+   250→  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => setToast({ message, type });
+   251→
+   252→  // Cart logic
+   253→  const addToCart = (product: Product) => setCart(prev => { const e = prev.find(i => i.product.id === product.id); return e ? prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product, quantity: 1 }]; });
+   254→  const removeFromCart = (productId: string) => setCart(prev => prev.filter(i => i.product.id !== productId));
+   255→  const updateCartQty = (productId: string, qty: number) => { if (qty <= 0) { removeFromCart(productId); return; } setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: qty } : i)); };
+   256→  const cartSubtotal = cart.reduce((sum, i) => sum + i.product.unitPrice * i.quantity, 0);
+   257→  const cartVat = cart.reduce((sum, i) => sum + (i.product.unitPrice * i.quantity * i.product.vatRate / 100), 0);
+   258→  const cartTotal = cartSubtotal + cartVat;
+   259→
+   260→  const generateInvoice = async () => {
+   261→    if (cart.length === 0 || !businessId) return;
+   262→    try {
+   263→      const items = cart.map(item => ({ productId: item.product.id, itemName: item.product.name, itemCode: item.product.itemCode, itemClassCode: item.product.itemClassCode, quantity: item.quantity, unitPrice: item.product.unitPrice, vatRate: item.product.vatRate, unitOfMeasure: item.product.unitOfMeasure, discountAmount: 0 }));
+   264→      const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, items, buyerPin: showBuyerFields ? buyerPin : undefined, buyerName: showBuyerFields ? buyerName : undefined, customerId: selectedCustomer?.id, paymentMethod }) });
+   265→      const data = await res.json(); if (!res.ok) throw new Error(data.error);
+   266→      setCart([]); setBuyerPin(''); setBuyerName(''); setShowBuyerFields(false);
+   267→      showToast('Invoice generated & queued for KRA sync!', 'success');
+   268→      fetch(`/api/kra/sync?invoiceId=${data.id}&businessId=${businessId}`, { method: 'POST' }).catch(() => {});
+   269→      fetchProducts(); fetchDashboard();
+   270→    } catch (err: any) { showToast(err.message || 'Failed', 'error'); }
+   271→  };
+   272→
+   273→  const initiateMpesaPayment = async () => {
+   274→    if (!mpesaPhone || !businessId) return;
+   275→    try {
+   276→      const res = await fetch('/api/mpesa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stk_push', phoneNumber: mpesaPhone, amount: cartTotal, businessId, accountReference: `POS-${Date.now()}`, transactionDesc: 'Parcy POS Payment' }) });
+   277→      const data = await res.json();
+   278→      if (data.success) { showToast('M-Pesa STK push sent! Check your phone.', 'success'); setPaymentMethod('mpesa'); }
+   279→      else showToast(data.error || 'M-Pesa failed', 'error');
+   280→    } catch (err: any) { showToast('M-Pesa error: ' + err.message, 'error'); }
+   281→  };
+   282→
+   283→  const validatePin = async (pin: string) => {
+   284→    if (!pin) return;
+   285→    try { const r = await fetch('/api/kra/validate-pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) }); const d = await r.json(); showToast(d.message, d.valid ? 'success' : 'error'); } catch { showToast('PIN validation failed', 'error'); }
+   286→  };
+   287→
+   288→  const retryInvoiceSync = async (invoiceId: string) => {
+   289→    try { const r = await fetch('/api/invoices', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: invoiceId, action: 'retry' }) }); if (!r.ok) throw new Error((await r.json()).error); showToast('Invoice queued for resync', 'success'); fetchInvoices(); } catch (err: any) { showToast(err.message, 'error'); }
+   290→  };
+   291→
+   292→  // ============================================
+   293→  // NAV ITEMS
+   294→  // ============================================
+   295→  const navItems: { view: View; icon: React.ReactNode; labelKey: string }[] = [
+   296→    { view: 'dashboard', icon: <LayoutDashboard className="w-5 h-5" />, labelKey: 'nav.dashboard' },
+   297→    { view: 'pos', icon: <ShoppingCart className="w-5 h-5" />, labelKey: 'nav.pos' },
+   298→    { view: 'invoices', icon: <FileText className="w-5 h-5" />, labelKey: 'nav.invoices' },
+   299→    { view: 'purchases', icon: <Package className="w-5 h-5" />, labelKey: 'nav.purchases' },
+   300→    { view: 'products', icon: <BarChart3 className="w-5 h-5" />, labelKey: 'nav.products' },
+   301→    { view: 'suppliers', icon: <Truck className="w-5 h-5" />, labelKey: 'nav.suppliers' },
+   302→    { view: 'customers', icon: <Users className="w-5 h-5" />, labelKey: 'nav.customers' },
+   303→    { view: 'mpesa', icon: <CreditCard className="w-5 h-5" />, labelKey: 'nav.mpesa' },
+   304→    { view: 'reports', icon: <Activity className="w-5 h-5" />, labelKey: 'nav.reports' },
+   305→    { view: 'expense-check', icon: <Shield className="w-5 h-5" />, labelKey: 'nav.expense-check' },
+   306→    { view: 'settings', icon: <Settings className="w-5 h-5" />, labelKey: 'nav.settings' },
+   307→  ];
+   308→
+   309→  // ============================================
+   310→  // RENDER: WELCOME MODAL
+   311→  // ============================================
+   312→  const renderWelcome = () => {
+   313→    if (!showWelcome) return null;
+   314→    return (
+   315→      <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+   316→        <div className="bg-card rounded-2xl max-w-lg w-full p-8 text-center space-y-4">
+   317→          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+   318→            <Store className="w-10 h-10 text-white" />
+   319→          </div>
+   320→          <h2 className="text-2xl font-bold">Welcome to Parcy POS</h2>
+   321→          <p className="text-muted-foreground">Kenya&apos;s smartest KRA eTIMS compliant point-of-sale. Your demo store is loaded with sample products, customers, and invoices.</p>
+   322→          <div className="grid grid-cols-2 gap-3 text-left text-sm">
+   323→            <div className="bg-muted rounded-lg p-3"><CheckCircle className="w-4 h-4 text-green-500 mb-1" /><p className="font-medium">KRA eTIMS Sync</p><p className="text-xs text-muted-foreground">Auto-sync invoices to KRA</p></div>
+   324→            <div className="bg-muted rounded-lg p-3"><CreditCard className="w-4 h-4 text-green-500 mb-1" /><p className="font-medium">M-Pesa Native</p><p className="text-xs text-muted-foreground">STK push & auto-reconciliation</p></div>
+   325→            <div className="bg-muted rounded-lg p-3"><WifiOff className="w-4 h-4 text-green-500 mb-1" /><p className="font-medium">Offline-First</p><p className="text-xs text-muted-foreground">Works when KRA is down</p></div>
+   326→            <div className="bg-muted rounded-lg p-3"><Shield className="w-4 h-4 text-green-500 mb-1" /><p className="font-medium">Two-Way Compliance</p><p className="text-xs text-muted-foreground">Sales + Purchase records</p></div>
+   327→          </div>
+   328→          <button onClick={() => setShowWelcome(false)} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition">
+   329→            Start Selling
+   330→          </button>
+   331→        </div>
+   332→      </div>
+   333→    );
+   334→  };
+   335→
+   336→  // ============================================
+   337→  // RENDER: NOTIFICATIONS PANEL
+   338→  // ============================================
+   339→  const renderNotifications = () => {
+   340→    if (!showNotifications) return null;
+   341→    const notifs = dashboard?.notifications || [];
+   342→    return (
+   343→      <div className="fixed inset-0 z-[55] bg-black/40" onClick={() => setShowNotifications(false)}>
+   344→        <div className="absolute right-0 top-0 h-full w-full max-w-md bg-card border-l border-border shadow-2xl overflow-y-auto" onClick={e => e.stopPropagation()}>
+   345→          <div className="p-4 border-b border-border flex items-center justify-between">
+   346→            <h3 className="font-bold text-lg flex items-center gap-2"><Bell className="w-5 h-5 text-primary" /> Notifications</h3>
+   347→            <button onClick={() => setShowNotifications(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button>
+   348→          </div>
+   349→          <div className="p-4 space-y-3">
+   350→            {notifs.map(n => (
+   351→              <div key={n.id} className={`rounded-xl p-4 border cursor-pointer transition hover:shadow-md ${
+   352→                n.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
+   353→                n.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' :
+   354→                'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+   355→              }`} onClick={() => { if (n.action) { setCurrentView(n.action as View); setShowNotifications(false); } }}>
+   356→                <div className="flex items-start gap-3">
+   357→                  {n.type === 'error' ? <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" /> :
+   358→                   n.type === 'warning' ? <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" /> :
+   359→                   <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />}
+   360→                  <div className="flex-1">
+   361→                    <p className="font-semibold text-sm">{n.title}</p>
+   362→                    <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
+   363→                    <p className="text-xs text-muted-foreground mt-1">{n.time}</p>
+   364→                  </div>
+   365→                  {n.action && <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+   366→                </div>
+   367→              </div>
+   368→            ))}
+   369→          </div>
+   370→        </div>
+   371→      </div>
+   372→    );
+   373→  };
+   374→
+   375→  // ============================================
+   376→  // RENDER: RECEIPT PREVIEW
+   377→  // ============================================
+   378→  const renderReceiptPreview = (inv: Invoice) => (
+   379→    <div className="invoice-receipt bg-white text-black text-xs space-y-2 print-area">
+   380→      <div className="text-center border-b border-dashed border-gray-400 pb-2">
+   381→        <p className="font-bold text-sm">PARCY DEMO STORE</p>
+   382→        <p>Moi Avenue, Nairobi</p>
+   383→        <p>PIN: A001234567B</p>
+   384→        <p className="font-bold mt-1">E-TIMS RECEIPT</p>
+   385→      </div>
+   386→      <div className="border-b border-dashed border-gray-400 pb-2 space-y-0.5">
+   387→        <div className="flex justify-between"><span>Receipt #:</span><span className="font-mono">{inv.invoiceNumber}</span></div>
+   388→        <div className="flex justify-between"><span>Date:</span><span>{new Date(inv.createdAt).toLocaleString('en-KE')}</span></div>
+   389→        {inv.buyerPin && <div className="flex justify-between"><span>Buyer PIN:</span><span className="font-mono">{inv.buyerPin}</span></div>}
+   390→        {inv.buyerName && <div className="flex justify-between"><span>Buyer:</span><span>{inv.buyerName}</span></div>}
+   391→      </div>
+   392→      <div className="border-b border-dashed border-gray-400 pb-2">
+   393→        {inv.items?.map((item: any, i: number) => (
+   394→          <div key={i} className="py-1">
+   395→            <p className="font-medium">{item.itemName}</p>
+   396→            <div className="flex justify-between text-[10px]">
+   397→              <span>{item.quantity} x {formatCurrency(item.unitPrice)}</span>
+   398→              <span>{formatCurrency(item.lineTotal)}</span>
+   399→            </div>
+   400→          </div>
+   401→        ))}
+   402→      </div>
+   403→      <div className="space-y-0.5">
+   404→        <div className="flex justify-between"><span>Subtotal:</span><span>{formatCurrency(inv.subtotal)}</span></div>
+   405→        <div className="flex justify-between"><span>VAT:</span><span>{formatCurrency(inv.totalVat)}</span></div>
+   406→        <div className="flex justify-between font-bold text-sm border-t border-dashed border-gray-400 pt-1"><span>TOTAL:</span><span>{formatCurrency(inv.totalAmount)}</span></div>
+   407→      </div>
+   408→      <div className="text-center border-t border-dashed border-gray-400 pt-2 space-y-0.5">
+   409→        <p className="font-medium">Payment: {inv.paymentMethod.toUpperCase()}</p>
+   410→        {inv.mpesaReceiptNumber && <p className="font-mono text-[10px]">M-Pesa: {inv.mpesaReceiptNumber}</p>}
+   411→        {inv.kraControlNumber && (
+   412→          <>
+   413→            <div className="mt-2 p-2 bg-gray-100 rounded text-center">
+   414→              <QrCode className="w-12 h-12 mx-auto" />
+   415→              <p className="text-[9px] font-mono mt-1">KRA Control: {inv.kraControlNumber}</p>
+   416→            </div>
+   417→            <p className="text-[9px] text-green-700 font-bold">KRA eTIMS VERIFIED</p>
+   418→          </>
+   419→        )}
+   420→        <p className="text-[9px] text-gray-500 mt-2">Thank you for shopping with us! Asante!</p>
+   421→      </div>
+   422→    </div>
+   423→  );
+   424→
+   425→  // ============================================
+   426→  // RENDER: SIDEBAR
+   427→  // ============================================
+   428→  const renderSidebar = () => (
+   429→    <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static md:z-auto`}>
+   430→      <div className="flex flex-col h-full">
+   431→        <div className="p-4 border-b border-border">
+   432→          <div className="flex items-center gap-3">
+   433→            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
+   434→              <Store className="w-6 h-6 text-white" />
+   435→            </div>
+   436→            <div><h1 className="text-lg font-bold">Parcy</h1><p className="text-[10px] text-muted-foreground tracking-wide uppercase">KRA eTIMS POS</p></div>
+   437→          </div>
+   438→        </div>
+   439→        <div className={`px-4 py-2 text-xs flex items-center gap-2 font-medium ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+   440→          {isOnline ? <><Wifi className="w-3 h-3" /> Online — Live Sync</> : <><WifiOff className="w-3 h-3" /> Offline — Queuing</>}
+   441→        </div>
+   442→        <nav className="flex-1 overflow-y-auto py-1">
+   443→          {navItems.map(item => (
+   444→            <button key={item.view} onClick={() => { setCurrentView(item.view); setSidebarOpen(false); }}
+   445→              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all ${currentView === item.view ? 'nav-item-active' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+   446→              {item.icon}
+   447→              {t(locale, item.labelKey)}
+   448→              {item.view === 'invoices' && dashboard && dashboard.sync.failed > 0 && (
+   449→                <span className="ml-auto bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0.5 rounded-full font-bold">{dashboard.sync.failed}</span>
+   450→              )}
+   451→              {item.view === 'dashboard' && dashboard && dashboard.notifications.filter(n => n.type === 'error' || n.type === 'warning').length > 0 && (
+   452→                <span className="ml-auto w-2 h-2 rounded-full bg-yellow-500" />
+   453→              )}
+   454→            </button>
+   455→          ))}
+   456→        </nav>
+   457→        <div className="p-3 border-t border-border space-y-1.5">
+   458→          <button onClick={() => setLocale(l => l === 'en' ? 'sw' : 'en')} className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors">
+   459→            <Globe className="w-4 h-4" />{locale === 'en' ? 'Kiswahili' : 'English'}
+   460→          </button>
+   461→          <button onClick={() => setIsDark(d => !d)} className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors">
+   462→            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}{isDark ? 'Light Mode' : 'Dark Mode'}
+   463→          </button>
+   464→        </div>
+   465→      </div>
+   466→    </aside>
+   467→  );
+   468→
+   469→  // ============================================
+   470→  // RENDER: DASHBOARD (MAJOR UPGRADE)
+   471→  // ============================================
+   472→  const renderDashboard = () => {
+   473→    if (!dashboard) return <div className="flex items-center justify-center h-64"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>;
+   474→    const compColor = dashboard.compliance.status === 'good' ? '#22c55e' : dashboard.compliance.status === 'warning' ? '#f59e0b' : '#ef4444';
+   475→    const maxSales = Math.max(...dashboard.dailyTrend.map(d => d.sales), 1);
+   476→
+   477→    return (
+   478→      <div className="space-y-5">
+   479→        {/* Hero: Compliance Score + Today's Performance */}
+   480→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   481→          <div className="md:col-span-1 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-800 dark:via-teal-900 dark:to-cyan-900 rounded-2xl p-6 text-white relative overflow-hidden">
+   482→            <div className="absolute -right-4 -bottom-4 opacity-10"><Shield className="w-32 h-32" /></div>
+   483→            <p className="text-emerald-100 text-xs font-medium tracking-wide uppercase">KRA eTIMS Compliance</p>
+   484→            <div className="flex items-center gap-4 mt-3">
+   485→              <div className="relative">
+   486→                <ProgressRing value={dashboard.compliance.score} size={72} strokeWidth={7} color={compColor} />
+   487→                <span className="absolute inset-0 flex items-center justify-center text-xl font-bold">{dashboard.compliance.score}%</span>
+   488→              </div>
+   489→              <div>
+   490→                <p className="text-sm font-medium">{dashboard.compliance.status === 'good' ? 'All Good' : dashboard.compliance.status === 'warning' ? 'Needs Attention' : 'Critical'}</p>
+   491→                <p className="text-xs text-emerald-200 mt-0.5">{dashboard.sync.synced}/{dashboard.sync.total} invoices synced</p>
+   492→              </div>
+   493→            </div>
+   494→            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+   495→              <div className="bg-white/10 rounded-lg py-1.5"><p className="text-lg font-bold">{dashboard.sync.syncRate}%</p><p className="text-[10px] text-emerald-200">Sync Rate</p></div>
+   496→              <div className="bg-white/10 rounded-lg py-1.5"><p className="text-lg font-bold">{dashboard.purchases.complianceRate}%</p><p className="text-[10px] text-emerald-200">Purchase</p></div>
+   497→              <div className="bg-white/10 rounded-lg py-1.5"><p className="text-lg font-bold">{dashboard.mpesa.reconciliationRate}%</p><p className="text-[10px] text-emerald-200">M-Pesa</p></div>
+   498→            </div>
+   499→          </div>
+   500→
+   501→          {/* Today's performance */}
+   502→          <div className="md:col-span-2 bg-card rounded-2xl border border-border p-6">
+   503→            <div className="flex items-center justify-between mb-4">
+   504→              <h3 className="font-bold flex items-center gap-2"><Activity className="w-5 h-5 text-primary" /> Today&apos;s Performance</h3>
+   505→              <span className="text-xs text-muted-foreground">{new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+   506→            </div>
+   507→            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   508→              <div><p className="text-xs text-muted-foreground">Today&apos;s Sales</p><p className="text-2xl font-bold text-primary">{formatCurrency(dashboard.sales.todaySales)}</p></div>
+   509→              <div><p className="text-xs text-muted-foreground">This Week</p><p className="text-2xl font-bold">{formatCurrency(dashboard.sales.weekSales)}</p></div>
+   510→              <div><p className="text-xs text-muted-foreground">This Month</p><p className="text-2xl font-bold">{formatCurrency(dashboard.sales.totalSales)}</p></div>
+   511→              <div><p className="text-xs text-muted-foreground">Avg Invoice</p><p className="text-2xl font-bold">{formatCurrency(dashboard.sales.averageInvoiceValue)}</p></div>
+   512→            </div>
+   513→            {/* 7-day mini chart */}
+   514→            <div className="mt-4 pt-4 border-t border-border">
+   515→              <p className="text-xs text-muted-foreground mb-2">7-Day Sales Trend</p>
+   516→              <MiniBarChart data={dashboard.dailyTrend.map(d => d.sales)} maxValue={maxSales} />
+   517→              <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+   518→                {dashboard.dailyTrend.map(d => <span key={d.date}>{d.date.split(' ')[0]}</span>)}
+   519→              </div>
+   520→            </div>
+   521→          </div>
+   522→        </div>
+   523→
+   524→        {/* Metric Cards Row */}
+   525→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   526→          <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/30 transition-colors">
+   527→            <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /></div><span className="text-xs text-muted-foreground">Total Sales</span></div>
+   528→            <p className="text-xl font-bold">{formatCurrency(dashboard.sales.totalSales)}</p>
+   529→            <p className="text-xs text-muted-foreground">{dashboard.sales.invoiceCount} invoices</p>
+   530→          </div>
+   531→          <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/30 transition-colors">
+   532→            <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><Receipt className="w-4 h-4 text-blue-600 dark:text-blue-400" /></div><span className="text-xs text-muted-foreground">VAT Collected</span></div>
+   533→            <p className="text-xl font-bold">{formatCurrency(dashboard.sales.totalVat)}</p>
+   534→            <p className="text-xs text-muted-foreground">Output VAT</p>
+   535→          </div>
+   536→          <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/30 transition-colors">
+   537→            <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" /></div><span className="text-xs text-muted-foreground">Pending Sync</span></div>
+   538→            <p className="text-xl font-bold">{dashboard.sync.queued + dashboard.sync.syncing}</p>
+   539→            {dashboard.sync.failed > 0 && <p className="text-xs text-red-600 dark:text-red-400">{dashboard.sync.failed} failed</p>}
+   540→          </div>
+   541→          <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/30 transition-colors">
+   542→            <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><CreditCard className="w-4 h-4 text-green-600 dark:text-green-400" /></div><span className="text-xs text-muted-foreground">M-Pesa Match</span></div>
+   543→            <p className="text-xl font-bold">{dashboard.mpesa.reconciliationRate}%</p>
+   544→            <p className="text-xs text-muted-foreground">{dashboard.mpesa.reconciled} matched</p>
+   545→          </div>
+   546→        </div>
+   547→
+   548→        {/* VAT Summary + Profit/Loss + Payment Breakdown */}
+   549→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   550→          {/* VAT Return Summary */}
+   551→          <div className="bg-card rounded-xl border border-border p-5">
+   552→            <h3 className="font-bold text-sm mb-3 flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-primary" /> VAT Return Summary</h3>
+   553→            <p className="text-[10px] text-muted-foreground mb-3">{dashboard.vatReturn.period}</p>
+   554→            <div className="space-y-2 text-sm">
+   555→              <div className="flex justify-between"><span className="text-muted-foreground">Output VAT (Sales)</span><span className="font-medium">{formatCurrency(dashboard.vatReturn.vatPayable)}</span></div>
+   556→              <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (Purchases)</span><span className="font-medium">{formatCurrency(dashboard.vatReturn.vatRecoverable)}</span></div>
+   557→              <div className="flex justify-between pt-2 border-t border-border font-bold">
+   558→                <span>Net VAT Payable</span>
+   559→                <span className={dashboard.vatReturn.netVat >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+   560→                  {formatCurrency(dashboard.vatReturn.netVat)}
+   561→                </span>
+   562→              </div>
+   563→            </div>
+   564→            <button onClick={() => setCurrentView('reports')} className="mt-3 text-xs text-primary hover:underline flex items-center gap-1">View Full Report <ArrowRight className="w-3 h-3" /></button>
+   565→          </div>
+   566→
+   567→          {/* Profit & Loss */}
+   568→          <div className="bg-card rounded-xl border border-border p-5">
+   569→            <h3 className="font-bold text-sm mb-3 flex items-center gap-2"><PiggyBank className="w-4 h-4 text-primary" /> Profit & Loss</h3>
+   570→            <div className="space-y-2 text-sm">
+   571→              <div className="flex justify-between"><span className="text-muted-foreground">Revenue</span><span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(dashboard.profitLoss.revenue)}</span></div>
+   572→              <div className="flex justify-between"><span className="text-muted-foreground">Cost of Goods</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(dashboard.profitLoss.costOfGoods)}</span></div>
+   573→              <div className="flex justify-between pt-2 border-t border-border font-bold">
+   574→                <span>Gross Profit</span>
+   575→                <span className={dashboard.profitLoss.grossProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(dashboard.profitLoss.grossProfit)}</span>
+   576→              </div>
+   577→              <div className="flex justify-between text-xs text-muted-foreground">
+   578→                <span>Margin</span>
+   579→                <span>{dashboard.profitLoss.grossProfitMargin}%</span>
+   580→              </div>
+   581→            </div>
+   582→          </div>
+   583→
+   584→          {/* Payment Breakdown */}
+   585→          <div className="bg-card rounded-xl border border-border p-5">
+   586→            <h3 className="font-bold text-sm mb-3 flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" /> Payment Methods</h3>
+   587→            {dashboard.sales.paymentBreakdown && (
+   588→              <div className="space-y-3">
+   589→                {[{ label: 'Cash', value: dashboard.sales.paymentBreakdown.cash, color: 'bg-emerald-500' }, { label: 'M-Pesa', value: dashboard.sales.paymentBreakdown.mpesa, color: 'bg-green-500' }, { label: 'Bank', value: dashboard.sales.paymentBreakdown.bank, color: 'bg-blue-500' }, { label: 'Credit', value: dashboard.sales.paymentBreakdown.credit, color: 'bg-orange-500' }].map(pm => {
+   590→                  const total = dashboard.sales.paymentBreakdown.cash + dashboard.sales.paymentBreakdown.mpesa + dashboard.sales.paymentBreakdown.bank + dashboard.sales.paymentBreakdown.credit;
+   591→                  const pct = total > 0 ? Math.round((pm.value / total) * 100) : 0;
+   592→                  return (
+   593→                    <div key={pm.label}>
+   594→                      <div className="flex justify-between text-xs mb-1"><span>{pm.label}</span><span className="font-medium">{formatCurrency(pm.value)} ({pct}%)</span></div>
+   595→                      <div className="w-full bg-muted rounded-full h-1.5"><div className={`${pm.color} h-1.5 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} /></div>
+   596→                    </div>
+   597→                  );
+   598→                })}
+   599→              </div>
+   600→            )}
+   601→          </div>
+   602→        </div>
+   603→
+   604→        {/* Top Products + Alerts */}
+   605→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   606→          <div className="bg-card rounded-xl border border-border p-5">
+   607→            <h3 className="font-bold text-sm mb-3 flex items-center gap-2"><Target className="w-4 h-4 text-primary" /> Top Products</h3>
+   608→            {dashboard.topProducts.length === 0 ? <p className="text-sm text-muted-foreground">No sales data yet</p> : (
+   609→              <div className="space-y-2">
+   610→                {dashboard.topProducts.map((p, i) => (
+   611→                  <div key={p.id} className="flex items-center gap-3">
+   612→                    <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">{i + 1}</span>
+   613→                    <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground">{p.category} • {Math.ceil(p.quantity)} sold</p></div>
+   614→                    <span className="text-sm font-semibold">{formatCurrency(p.revenue)}</span>
+   615→                  </div>
+   616→                ))}
+   617→              </div>
+   618→            )}
+   619→          </div>
+   620→
+   621→          {/* Alerts */}
+   622→          <div className="bg-card rounded-xl border border-border p-5">
+   623→            <h3 className="font-bold text-sm mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Alerts</h3>
+   624→            <div className="space-y-2 max-h-48 overflow-y-auto">
+   625→              {dashboard.notifications.filter(n => n.type !== 'info').map(n => (
+   626→                <div key={n.id} className={`rounded-lg p-3 text-sm cursor-pointer hover:opacity-80 transition ${n.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'}`}
+   627→                  onClick={() => { if (n.action) setCurrentView(n.action as View); }}>
+   628→                  <p className="font-medium text-xs">{n.title}</p><p className="text-xs opacity-80">{n.message}</p>
+   629→                </div>
+   630→              ))}
+   631→              {dashboard.alerts.lowStock.length > 0 && dashboard.alerts.lowStock.map((p: any) => (
+   632→                <div key={p.id} className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 text-sm cursor-pointer hover:opacity-80 transition" onClick={() => setCurrentView('products')}>
+   633→                  <p className="font-medium text-xs text-orange-700 dark:text-orange-300">Low Stock: {p.name}</p>
+   634→                  <p className="text-xs text-orange-600 dark:text-orange-400">{p.quantity} remaining (reorder at {p.reorderLevel})</p>
+   635→                </div>
+   636→              ))}
+   637→              {dashboard.notifications.filter(n => n.type !== 'info').length === 0 && dashboard.alerts.lowStock.length === 0 && (
+   638→                <div className="text-center py-4"><CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" /><p className="text-sm text-muted-foreground">No alerts — you&apos;re all good!</p></div>
+   639→              )}
+   640→            </div>
+   641→          </div>
+   642→        </div>
+   643→
+   644→        {/* Quick Actions */}
+   645→        <div className="bg-card rounded-xl border border-border p-5">
+   646→          <h3 className="font-bold text-sm mb-3">Quick Actions</h3>
+   647→          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+   648→            <button onClick={() => setCurrentView('pos')} className="flex items-center gap-2 px-3 py-2.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><ShoppingCart className="w-4 h-4" /> New Sale</button>
+   649→            <button onClick={() => setCurrentView('purchases')} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Package className="w-4 h-4" /> Record Purchase</button>
+   650→            <button onClick={async () => { await fetch('/api/kra/sync?action=process_queue&businessId=' + businessId, { method: 'POST' }); fetchDashboard(); showToast('Sync queue processed', 'success'); }} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><RefreshCw className="w-4 h-4" /> Sync Now</button>
+   651→            <button onClick={() => setCurrentView('reports')} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Activity className="w-4 h-4" /> Reports</button>
+   652→            <button onClick={async () => { const csvRows = [['Invoice#','Buyer','Amount','Status','Date']]; invoices.forEach(i => csvRows.push([i.invoiceNumber, i.buyerName || 'Walk-in', String(i.totalAmount), i.status, new Date(i.createdAt).toLocaleDateString()])); const blob = new Blob([csvRows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `parcy-invoices-${Date.now()}.csv`; a.click(); showToast('CSV exported!', 'success'); }} className="flex items-center gap-2 px-3 py-2.5 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition text-sm font-medium"><Download className="w-4 h-4" /> Export CSV</button>
+   653→          </div>
+   654→        </div>
+   655→      </div>
+   656→    );
+   657→  };
+   658→
+   659→  // ============================================
+   660→  // RENDER: POS (unchanged logic, better visuals)
+   661→  // ============================================
+   662→  const renderPOS = () => {
+   663→    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(posSearch.toLowerCase()) || p.sku?.toLowerCase().includes(posSearch.toLowerCase()));
+   664→    const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+   665→    return (
+   666→      <div className="pos-grid">
+   667→        <div className="space-y-4 overflow-y-auto">
+   668→          <div className="relative">
+   669→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   670→            <input type="text" placeholder={t(locale, 'pos.searchProducts')} value={posSearch} onChange={e => setPosSearch(e.target.value)}
+   671→              className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+   672→          </div>
+   673→          <div className="flex gap-2 flex-wrap">
+   674→            <button onClick={() => setPosSearch('')} className={`px-3 py-1 text-xs rounded-full border transition ${posSearch === '' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>All</button>
+   675→            {categories.map(cat => (
+   676→              <button key={cat} onClick={() => setPosSearch(cat || '')} className={`px-3 py-1 text-xs rounded-full border transition ${posSearch === cat ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>{cat}</button>
+   677→            ))}
+   678→          </div>
+   679→          {products.length === 0 ? (
+   680→            <div className="text-center py-12 text-muted-foreground"><Package className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'pos.noProducts')}</p></div>
+   681→          ) : (
+   682→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+   683→              {filteredProducts.map(product => (
+   684→                <button key={product.id} onClick={() => addToCart(product)}
+   685→                  className="bg-card border border-border rounded-xl p-3 text-left hover:border-primary hover:shadow-lg hover:shadow-primary/5 transition-all active:scale-[0.97]">
+   686→                  <div className="flex items-start justify-between">
+   687→                    <p className="font-medium text-sm truncate flex-1">{product.name}</p>
+   688→                    {product.quantity <= product.reorderLevel && <AlertTriangle className="w-3 h-3 text-yellow-500 shrink-0 ml-1" />}
+   689→                  </div>
+   690→                  <p className="text-[10px] text-muted-foreground mt-0.5">{product.sku}</p>
+   691→                  <div className="flex items-baseline justify-between mt-2">
+   692→                    <p className="text-primary font-bold">{formatCurrency(product.unitPrice)}</p>
+   693→                    <p className="text-[10px] text-muted-foreground">{product.quantity} left</p>
+   694→                  </div>
+   695→                </button>
+   696→              ))}
+   697→            </div>
+   698→          )}
+   699→        </div>
+   700→        <div className="bg-card border border-border rounded-xl flex flex-col h-full">
+   701→          <div className="p-4 border-b border-border flex items-center justify-between">
+   702→            <h2 className="font-bold flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-primary" /> {t(locale, 'pos.cart')} {cart.length > 0 && <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">{cart.length}</span>}</h2>
+   703→            {cart.length > 0 && <button onClick={() => setCart([])} className="text-xs text-muted-foreground hover:text-destructive">{t(locale, 'pos.clearCart')}</button>}
+   704→          </div>
+   705→          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+   706→            {cart.length === 0 ? <p className="text-center text-muted-foreground py-8">{t(locale, 'pos.emptyCart')}</p> : cart.map(item => (
+   707→              <div key={item.product.id} className="flex items-center gap-2 bg-muted rounded-lg p-2.5">
+   708→                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.product.name}</p><p className="text-xs text-muted-foreground">{formatCurrency(item.product.unitPrice)} x {item.quantity}</p></div>
+   709→                <div className="flex items-center gap-1">
+   710→                  <button onClick={() => updateCartQty(item.product.id, item.quantity - 1)} className="w-7 h-7 flex items-center justify-center rounded bg-card border border-border text-sm hover:bg-muted">-</button>
+   711→                  <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+   712→                  <button onClick={() => updateCartQty(item.product.id, item.quantity + 1)} className="w-7 h-7 flex items-center justify-center rounded bg-card border border-border text-sm hover:bg-muted">+</button>
+   713→                </div>
+   714→                <p className="font-semibold text-sm w-20 text-right">{formatCurrency(item.product.unitPrice * item.quantity)}</p>
+   715→                <button onClick={() => removeFromCart(item.product.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
+   716→              </div>
+   717→            ))}
+   718→          </div>
+   719→          <div className="border-t border-border p-4 space-y-3">
+   720→            <div className="space-y-1 text-sm">
+   721→              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(cartSubtotal)}</span></div>
+   722→              <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span>{formatCurrency(cartVat)}</span></div>
+   723→              <div className="flex justify-between font-bold text-lg pt-1 border-t border-border"><span>Total</span><span className="text-primary">{formatCurrency(cartTotal)}</span></div>
+   724→            </div>
+   725→            <button onClick={() => setShowBuyerFields(!showBuyerFields)} className="w-full text-left text-xs text-primary hover:underline flex items-center gap-1">
+   726→              <ChevronRight className={`w-3 h-3 transition-transform ${showBuyerFields ? 'rotate-90' : ''}`} />{t(locale, 'pos.addBuyer')}
+   727→            </button>
+   728→            {showBuyerFields && (
+   729→              <div className="space-y-2 p-3 bg-muted rounded-lg">
+   730→                <div><label className="text-xs text-muted-foreground">{t(locale, 'pos.buyerPin')}</label><div className="flex gap-1"><input type="text" value={buyerPin} onChange={e => setBuyerPin(e.target.value.toUpperCase())} placeholder="A001234567B" maxLength={11} className="flex-1 px-2 py-1.5 text-sm bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary" /><button onClick={() => validatePin(buyerPin)} className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:opacity-90">{t(locale, 'pos.validatePin')}</button></div></div>
+   731→                <div><label className="text-xs text-muted-foreground">{t(locale, 'pos.buyerName')}</label><input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Company Name" className="w-full px-2 py-1.5 text-sm bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary" /></div>
+   732→              </div>
+   733→            )}
+   734→            <div>
+   735→              <label className="text-xs text-muted-foreground">{t(locale, 'pos.paymentMethod')}</label>
+   736→              <div className="grid grid-cols-2 gap-2 mt-1">
+   737→                {['cash', 'mpesa', 'bank_transfer', 'credit'].map(method => (
+   738→                  <button key={method} onClick={() => setPaymentMethod(method)} className={`px-3 py-2 text-xs rounded-lg border transition ${paymentMethod === method ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>{t(locale, `pos.${method}` as any)}</button>
+   739→                ))}
+   740→              </div>
+   741→            </div>
+   742→            {paymentMethod === 'mpesa' && (
+   743→              <div className="space-y-2"><div><label className="text-xs text-muted-foreground">{t(locale, 'pos.mpesaPhone')}</label><input type="tel" value={mpesaPhone} onChange={e => setMpesaPhone(e.target.value)} placeholder="254712345678" className="w-full px-2 py-1.5 text-sm bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary" /></div>
+   744→                <button onClick={initiateMpesaPayment} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition flex items-center justify-center gap-2"><Phone className="w-4 h-4" /> {t(locale, 'pos.initiatePayment')}</button></div>
+   745→            )}
+   746→            <button onClick={generateInvoice} disabled={cart.length === 0} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+   747→              <Receipt className="w-5 h-5" /> {t(locale, 'pos.generateInvoice')}
+   748→            </button>
+   749→          </div>
+   750→        </div>
+   751→      </div>
+   752→    );
+   753→  };
+   754→
+   755→  // ============================================
+   756→  // RENDER: INVOICES (with search + receipt preview)
+   757→  // ============================================
+   758→  const renderInvoices = () => {
+   759→    const filtered = invoices.filter(i => !invoiceSearch || i.invoiceNumber.toLowerCase().includes(invoiceSearch.toLowerCase()) || (i.buyerName || '').toLowerCase().includes(invoiceSearch.toLowerCase()));
+   760→    return (
+   761→      <div className="space-y-4">
+   762→        <div className="flex items-center justify-between flex-wrap gap-2">
+   763→          <h2 className="text-xl font-bold">{t(locale, 'invoices.title')}</h2>
+   764→          <div className="flex items-center gap-2">
+   765→            <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" /><input type="text" placeholder="Search invoices..." value={invoiceSearch} onChange={e => setInvoiceSearch(e.target.value)} className="pl-8 pr-3 py-1.5 bg-card border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary w-44" /></div>
+   766→            <button onClick={() => fetchInvoices()} className="p-1.5 hover:bg-muted rounded-lg"><RefreshCw className="w-4 h-4" /></button>
+   767→          </div>
+   768→        </div>
+   769→        <div className="flex gap-2 flex-wrap">
+   770→          {['all', 'synced', 'queued', 'failed', 'cancelled'].map(status => (
+   771→            <button key={status} onClick={() => { setInvoiceFilter(status); fetchInvoices(status !== 'all' ? status : undefined); }}
+   772→              className={`px-3 py-1.5 text-xs rounded-full border transition ${invoiceFilter === status ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>
+   773→              {t(locale, `invoices.${status}` as any)} {status !== 'all' && `(${invoices.filter(i => i.status === status).length})`}
+   774→            </button>
+   775→          ))}
+   776→        </div>
+   777→        {filtered.length === 0 ? (
+   778→          <div className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'invoices.noInvoices')}</p></div>
+   779→        ) : (
+   780→          <div className="space-y-2">{filtered.map(inv => (
+   781→            <div key={inv.id} onClick={async () => { const r = await fetch(`/api/invoices?id=${inv.id}`); setSelectedInvoice(await r.json()); }}
+   782→              className="bg-card border border-border rounded-xl p-4 hover:border-primary cursor-pointer transition hover:shadow-sm">
+   783→              <div className="flex items-center justify-between">
+   784→                <div className="flex items-center gap-3"><StatusBadge status={inv.status} /><div><p className="font-medium text-sm">{inv.invoiceNumber}</p><p className="text-xs text-muted-foreground">{inv.buyerName || 'Walk-in'} • {new Date(inv.createdAt).toLocaleDateString()}</p></div></div>
+   785→                <div className="text-right"><p className="font-bold text-sm">{formatCurrency(inv.totalAmount)}</p><p className="text-[10px] text-muted-foreground capitalize">{inv.paymentMethod}</p></div>
+   786→              </div>
+   787→              {inv.lastError && <p className="text-xs text-red-600 dark:text-red-400 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {inv.lastError}</p>}
+   788→            </div>
+   789→          ))}</div>
+   790→        )}
+   791→        {/* Invoice Detail Modal with Receipt Preview */}
+   792→        {selectedInvoice && (
+   793→          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setSelectedInvoice(null)}>
+   794→            <div className="bg-card rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+   795→              <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{selectedInvoice.invoiceNumber}</h3><button onClick={() => setSelectedInvoice(null)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+   796→              <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+   797→                <div><span className="text-muted-foreground">Status</span><div className="mt-1"><StatusBadge status={selectedInvoice.status} /></div></div>
+   798→                <div><span className="text-muted-foreground">Payment</span><p className="font-medium capitalize mt-1">{selectedInvoice.paymentMethod}</p></div>
+   799→                {selectedInvoice.buyerPin && <div><span className="text-muted-foreground">Buyer PIN</span><p className="font-mono font-medium mt-1">{selectedInvoice.buyerPin}</p></div>}
+   800→                {selectedInvoice.buyerName && <div><span className="text-muted-foreground">Buyer</span><p className="font-medium mt-1">{selectedInvoice.buyerName}</p></div>}
+   801→                {selectedInvoice.mpesaReceiptNumber && <div><span className="text-muted-foreground">M-Pesa</span><p className="font-mono text-green-600 mt-1">{selectedInvoice.mpesaReceiptNumber}</p></div>}
+   802→              </div>
+   803→              {/* Receipt Preview */}
+   804→              <div className="mb-4">{renderReceiptPreview(selectedInvoice)}</div>
+   805→              {/* KRA Details */}
+   806→              {selectedInvoice.kraControlNumber && (
+   807→                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 space-y-1 mb-4">
+   808→                  <p className="text-xs font-bold text-green-700 dark:text-green-400 flex items-center gap-1"><Shield className="w-3 h-3" /> KRA eTIMS Verified</p>
+   809→                  <div className="text-xs text-muted-foreground space-y-0.5">
+   810→                    <p>Control: <span className="font-mono">{selectedInvoice.kraControlNumber}</span></p>
+   811→                    <p>Signature: <span className="font-mono">{selectedInvoice.kraSignature?.substring(0, 24)}...</span></p>
+   812→                  </div>
+   813→                </div>
+   814→              )}
+   815→              {selectedInvoice.lastError && (
+   816→                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 mb-4">
+   817→                  <p className="text-xs text-red-700 dark:text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {selectedInvoice.lastError}</p>
+   818→                  <p className="text-[10px] text-muted-foreground mt-1">Retries: {selectedInvoice.retryCount}/5</p>
+   819→                </div>
+   820→              )}
+   821→              <div className="flex gap-2">
+   822→                {selectedInvoice.status === 'failed' && <button onClick={() => { retryInvoiceSync(selectedInvoice.id); setSelectedInvoice(null); }} className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 flex items-center justify-center gap-2"><RotateCcw className="w-4 h-4" /> Retry Sync</button>}
+   823→                {selectedInvoice.invoiceType === 'standard' && <button onClick={() => { setCreditNoteInvoice(selectedInvoice); setShowCreditNote(true); setSelectedInvoice(null); }} className="flex-1 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:opacity-90 flex items-center justify-center gap-2"><FileText className="w-4 h-4" /> Credit/Debit Note</button>}
+   824→                <button onClick={() => { window.print(); }} className="flex-1 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:opacity-90 flex items-center justify-center gap-2"><Printer className="w-4 h-4" /> Print Receipt</button>
+   825→              </div>
+   826→            </div>
+   827→          </div>
+   828→        )}
+   829→      </div>
+   830→    );
+   831→  };
+   832→
+   833→  // ============================================
+   834→  // RENDER: PURCHASES
+   835→  // ============================================
+   836→  const renderPurchases = () => (
+   837→    <div className="space-y-4">
+   838→      <div className="flex items-center justify-between">
+   839→        <h2 className="text-xl font-bold">{t(locale, 'purchases.title')}</h2>
+   840→        <button onClick={() => setShowNewPurchase(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Plus className="w-4 h-4" /> {t(locale, 'purchases.newPurchase')}</button>
+   841→      </div>
+   842→      {purchases.some(p => !p.isEtimesCompliant) && (
+   843→        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 flex items-center gap-2">
+   844→          <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
+   845→          <p className="text-sm text-yellow-800 dark:text-yellow-300">{t(locale, 'purchases.expenseWarning')}</p>
+   846→        </div>
+   847→      )}
+   848→      {purchases.length === 0 ? <div className="text-center py-12 text-muted-foreground"><Package className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'purchases.noPurchases')}</p></div> : (
+   849→        <div className="space-y-2">{purchases.map(purchase => (
+   850→          <div key={purchase.id} className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition">
+   851→            <div className="flex items-center justify-between">
+   852→              <div className="flex items-center gap-3">{purchase.isEtimesCompliant ? <CheckCircle className="w-5 h-5 text-green-500" /> : <AlertTriangle className="w-5 h-5 text-yellow-500" />}
+   853→                <div><p className="font-medium text-sm">{purchase.description}</p><p className="text-xs text-muted-foreground">{purchase.supplierName} • {new Date(purchase.purchaseDate).toLocaleDateString()}</p></div>
+   854→              </div>
+   855→              <div className="text-right"><p className="font-bold text-sm">{formatCurrency(purchase.totalAmount)}</p>
+   856→                <div className="flex items-center gap-2 mt-1 justify-end">
+   857→                  {purchase.isEtimesCompliant ? <span className="text-[10px] text-green-600 dark:text-green-400 font-medium">{t(locale, 'purchases.compliant')}</span> : <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium">{t(locale, 'purchases.nonCompliant')}</span>}
+   858→                  {purchase.buyerInitiated && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded font-medium">{t(locale, 'purchases.buyerInitiated')}</span>}
+   859→                </div>
+   860→              </div>
+   861→            </div>
+   862→          </div>
+   863→        ))}</div>
+   864→      )}
+   865→      {showNewPurchase && (
+   866→        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewPurchase(false)}>
+   867→          <div className="bg-card rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+   868→            <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{t(locale, 'purchases.newPurchase')}</h3><button onClick={() => setShowNewPurchase(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+   869→            <div className="space-y-3">
+   870→              <div><label className="text-xs text-muted-foreground">{t(locale, 'purchases.supplierName')}</label><input type="text" value={newPurchase.supplierName} onChange={e => setNewPurchase(p => ({ ...p, supplierName: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   871→              <div><label className="text-xs text-muted-foreground">{t(locale, 'purchases.supplierPin')}</label><input type="text" value={newPurchase.supplierPin} onChange={e => setNewPurchase(p => ({ ...p, supplierPin: e.target.value.toUpperCase() }))} placeholder="A00XXXXXXXB" maxLength={11} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   872→              <div><label className="text-xs text-muted-foreground">{t(locale, 'purchases.purchaseDescription')}</label><input type="text" value={newPurchase.description} onChange={e => setNewPurchase(p => ({ ...p, description: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   873→              <div><label className="text-xs text-muted-foreground">{t(locale, 'purchases.category')}</label><select value={newPurchase.category} onChange={e => setNewPurchase(p => ({ ...p, category: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary">{['Food', 'Household', 'Beverages', 'Services', 'Equipment', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+   874→              <div className="grid grid-cols-2 gap-3">
+   875→                <div><label className="text-xs text-muted-foreground">Total (KES)</label><input type="number" value={newPurchase.totalAmount} onChange={e => setNewPurchase(p => ({ ...p, totalAmount: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   876→                <div><label className="text-xs text-muted-foreground">VAT (KES)</label><input type="number" value={newPurchase.totalVat} onChange={e => setNewPurchase(p => ({ ...p, totalVat: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   877→              </div>
+   878→              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={newPurchase.isEtimesCompliant} onChange={e => setNewPurchase(p => ({ ...p, isEtimesCompliant: e.target.checked }))} className="w-4 h-4 accent-primary" />{t(locale, 'purchases.isCompliant')}</label>
+   879→              {!newPurchase.isEtimesCompliant && <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={newPurchase.buyerInitiated} onChange={e => setNewPurchase(p => ({ ...p, buyerInitiated: e.target.checked }))} className="w-4 h-4 accent-primary" />{t(locale, 'purchases.generateCompliant')}</label>}
+   880→              <button onClick={async () => { try { const r = await fetch('/api/purchases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newPurchase }) }); if (!r.ok) throw new Error((await r.json()).error); setShowNewPurchase(false); setNewPurchase({ supplierName: '', supplierPin: '', description: '', totalAmount: '', totalVat: '0', category: 'Food', paymentMethod: 'cash', isEtimesCompliant: false, buyerInitiated: false, notes: '' }); fetchPurchases(); showToast('Purchase recorded!', 'success'); } catch (err: any) { showToast(err.message, 'error'); } }} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">{t(locale, 'purchases.recordPurchase')}</button>
+   881→            </div>
+   882→          </div>
+   883→        </div>
+   884→      )}
+   885→    </div>
+   886→  );
+   887→
+   888→  // ============================================
+   889→  // RENDER: PRODUCTS
+   890→  // ============================================
+   891→  const renderProducts = () => (
+   892→    <div className="space-y-4">
+   893→      <div className="flex items-center justify-between">
+   894→        <h2 className="text-xl font-bold">{t(locale, 'products.title')}</h2>
+   895→        <button onClick={() => setShowNewProduct(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Plus className="w-4 h-4" /> {t(locale, 'products.newProduct')}</button>
+   896→      </div>
+   897→      {products.length === 0 ? <div className="text-center py-12 text-muted-foreground"><Package className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'products.noProducts')}</p></div> : (
+   898→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   899→          {products.map(product => (
+   900→            <div key={product.id} className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition">
+   901→              <div className="flex items-start justify-between">
+   902→                <div><p className="font-medium">{product.name}</p><p className="text-xs text-muted-foreground">{product.sku} • {product.category}</p></div>
+   903→                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${product.quantity === 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : product.quantity <= product.reorderLevel ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
+   904→                  {product.quantity === 0 ? 'Out' : product.quantity <= product.reorderLevel ? 'Low' : 'In Stock'}
+   905→                </span>
+   906→              </div>
+   907→              <div className="flex items-baseline justify-between mt-3">
+   908→                <p className="text-lg font-bold text-primary">{formatCurrency(product.unitPrice)}</p>
+   909→                <p className="text-xs text-muted-foreground">VAT {product.vatRate}%</p>
+   910→              </div>
+   911→              <div className="flex items-center justify-between mt-2">
+   912→                <p className="text-sm text-muted-foreground">Stock: <span className="font-medium text-foreground">{product.quantity}</span></p>
+   913→                <div className="flex gap-1">
+   914→                  <button onClick={async () => { await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: product.id, quantity: product.quantity + 10 }) }); fetchProducts(); showToast('Stock +10', 'success'); }} className="text-xs px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded hover:opacity-80 font-medium">+10</button>
+   915→                  <button onClick={async () => { await fetch(`/api/products?id=${product.id}`, { method: 'DELETE' }); fetchProducts(); showToast('Product removed', 'success'); }} className="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:opacity-80 font-medium">Remove</button>
+   916→                </div>
+   917→              </div>
+   918→            </div>
+   919→          ))}
+   920→        </div>
+   921→      )}
+   922→      {showNewProduct && (
+   923→        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewProduct(false)}>
+   924→          <div className="bg-card rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+   925→            <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{t(locale, 'products.newProduct')}</h3><button onClick={() => setShowNewProduct(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+   926→            <div className="space-y-3">
+   927→              {[{ key: 'name', label: 'Product Name', type: 'text' }, { key: 'sku', label: 'SKU', type: 'text' }, { key: 'unitPrice', label: 'Price (KES)', type: 'number' }, { key: 'costPrice', label: 'Cost Price (KES)', type: 'number' }, { key: 'vatRate', label: 'VAT Rate (%)', type: 'number' }, { key: 'quantity', label: 'Stock', type: 'number' }, { key: 'itemCode', label: 'KRA Item Code', type: 'text' }].map(f => (
+   928→                <div key={f.key}><label className="text-xs text-muted-foreground">{f.label}</label><input type={f.type} value={(newProduct as any)[f.key]} onChange={e => setNewProduct(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   929→              ))}
+   930→              <div><label className="text-xs text-muted-foreground">Category</label><select value={newProduct.category} onChange={e => setNewProduct(p => ({ ...p, category: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary">{['Food', 'Dairy', 'Bakery', 'Beverages', 'Household', 'Services', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+   931→              <button onClick={async () => { try { const r = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newProduct }) }); if (!r.ok) throw new Error((await r.json()).error); setShowNewProduct(false); setNewProduct({ name: '', sku: '', category: 'Food', unitPrice: '', costPrice: '', vatRate: '16', vatType: 'VAT', quantity: '0', itemCode: '', itemClassCode: '', unitOfMeasure: 'PCE' }); fetchProducts(); showToast('Product added!', 'success'); } catch (err: any) { showToast(err.message, 'error'); } }} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">{t(locale, 'products.saveProduct')}</button>
+   932→            </div>
+   933→          </div>
+   934→        </div>
+   935→      )}
+   936→    </div>
+   937→  );
+   938→
+   939→  // ============================================
+   940→  // RENDER: SUPPLIERS
+   941→  // ============================================
+   942→  const renderSuppliers = () => (
+   943→    <div className="space-y-4">
+   944→      <div className="flex items-center justify-between"><h2 className="text-xl font-bold">{t(locale, 'suppliers.title')}</h2><button onClick={() => setShowNewSupplier(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Plus className="w-4 h-4" /> {t(locale, 'suppliers.newSupplier')}</button></div>
+   945→      <p className="text-sm text-muted-foreground">{t(locale, 'suppliers.complianceNote')}</p>
+   946→      {suppliers.length === 0 ? <div className="text-center py-12 text-muted-foreground"><Truck className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'suppliers.noSuppliers')}</p></div> : (
+   947→        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{suppliers.map(supplier => (
+   948→          <div key={supplier.id} className="bg-card border border-border rounded-xl p-4">
+   949→            <div className="flex items-center justify-between mb-2"><h4 className="font-medium">{supplier.name}</h4>
+   950→              {supplier.isEtimesCompliant ? <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"><CheckCircle className="w-3 h-3" /> eTIMS</span> : <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"><AlertTriangle className="w-3 h-3" /> No eTIMS</span>}
+   951→            </div>
+   952→            {supplier.kraPin && <p className="text-xs text-muted-foreground font-mono">PIN: {supplier.kraPin}</p>}
+   953→            {supplier.phone && <p className="text-xs text-muted-foreground">{supplier.phone}</p>}
+   954→            {supplier._count && <p className="text-xs text-muted-foreground mt-1">{supplier._count.purchases} purchase records</p>}
+   955→          </div>
+   956→        ))}</div>
+   957→      )}
+   958→      {showNewSupplier && (
+   959→        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewSupplier(false)}>
+   960→          <div className="bg-card rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+   961→            <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{t(locale, 'suppliers.newSupplier')}</h3><button onClick={() => setShowNewSupplier(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+   962→            <div className="space-y-3">
+   963→              <div><label className="text-xs text-muted-foreground">Name</label><input type="text" value={newSupplier.name} onChange={e => setNewSupplier(s => ({ ...s, name: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   964→              <div><label className="text-xs text-muted-foreground">KRA PIN</label><input type="text" value={newSupplier.kraPin} onChange={e => setNewSupplier(s => ({ ...s, kraPin: e.target.value.toUpperCase() }))} placeholder="A00XXXXXXXB" maxLength={11} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   965→              <div><label className="text-xs text-muted-foreground">Phone</label><input type="tel" value={newSupplier.phone} onChange={e => setNewSupplier(s => ({ ...s, phone: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   966→              <div><label className="text-xs text-muted-foreground">Email</label><input type="email" value={newSupplier.email} onChange={e => setNewSupplier(s => ({ ...s, email: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   967→              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={newSupplier.isEtimesCompliant} onChange={e => setNewSupplier(s => ({ ...s, isEtimesCompliant: e.target.checked }))} className="w-4 h-4 accent-primary" />{t(locale, 'suppliers.isEtimesCompliant')}</label>
+   968→              <button onClick={async () => { try { const r = await fetch('/api/suppliers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newSupplier }) }); if (!r.ok) throw new Error((await r.json()).error); setShowNewSupplier(false); setNewSupplier({ name: '', kraPin: '', phone: '', email: '', address: '', isEtimesCompliant: false }); fetchSuppliers(); showToast('Supplier added!', 'success'); } catch (err: any) { showToast(err.message, 'error'); } }} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">{t(locale, 'suppliers.saveSupplier')}</button>
+   969→            </div>
+   970→          </div>
+   971→        </div>
+   972→      )}
+   973→    </div>
+   974→  );
+   975→
+   976→  // ============================================
+   977→  // RENDER: CUSTOMERS
+   978→  // ============================================
+   979→  const renderCustomers = () => (
+   980→    <div className="space-y-4">
+   981→      <div className="flex items-center justify-between"><h2 className="text-xl font-bold">{t(locale, 'customers.title')}</h2><button onClick={() => setShowNewCustomer(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Plus className="w-4 h-4" /> {t(locale, 'customers.newCustomer')}</button></div>
+   982→      <p className="text-sm text-muted-foreground">{t(locale, 'customers.b2bNote')}</p>
+   983→      {customers.length === 0 ? <div className="text-center py-12 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'customers.noCustomers')}</p></div> : (
+   984→        <div className="space-y-2">{customers.map(customer => (
+   985→          <div key={customer.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
+   986→            <div><p className="font-medium">{customer.name}</p><div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">{customer.kraPin && <span className="font-mono">PIN: {customer.kraPin}</span>}{customer.phone && <span>{customer.phone}</span>}{customer.isVatRegistered && <span className="text-green-600 dark:text-green-400 font-medium">VAT Registered</span>}</div></div>
+   987→            <button className="text-xs text-primary hover:underline font-medium" onClick={() => { setSelectedCustomer(customer); setShowBuyerFields(true); setBuyerPin(customer.kraPin || ''); setBuyerName(customer.name); setCurrentView('pos'); }}>Use in POS</button>
+   988→          </div>
+   989→        ))}</div>
+   990→      )}
+   991→      {showNewCustomer && (
+   992→        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewCustomer(false)}>
+   993→          <div className="bg-card rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+   994→            <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{t(locale, 'customers.newCustomer')}</h3><button onClick={() => setShowNewCustomer(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+   995→            <div className="space-y-3">
+   996→              <div><label className="text-xs text-muted-foreground">Name</label><input type="text" value={newCustomer.name} onChange={e => setNewCustomer(c => ({ ...c, name: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   997→              <div><label className="text-xs text-muted-foreground">KRA PIN</label><input type="text" value={newCustomer.kraPin} onChange={e => setNewCustomer(c => ({ ...c, kraPin: e.target.value.toUpperCase() }))} placeholder="P00XXXXXXXQ" maxLength={11} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   998→              <div><label className="text-xs text-muted-foreground">Phone</label><input type="tel" value={newCustomer.phone} onChange={e => setNewCustomer(c => ({ ...c, phone: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+   999→              <div><label className="text-xs text-muted-foreground">Email</label><input type="email" value={newCustomer.email} onChange={e => setNewCustomer(c => ({ ...c, email: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1000→              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={newCustomer.isVatRegistered} onChange={e => setNewCustomer(c => ({ ...c, isVatRegistered: e.target.checked }))} className="w-4 h-4 accent-primary" />{t(locale, 'customers.vatRegistered')}</label>
+  1001→              <button onClick={async () => { try { const r = await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newCustomer }) }); if (!r.ok) throw new Error((await r.json()).error); setShowNewCustomer(false); setNewCustomer({ name: '', kraPin: '', phone: '', email: '', address: '', isVatRegistered: false }); fetchCustomers(); showToast('Customer added!', 'success'); } catch (err: any) { showToast(err.message, 'error'); } }} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">{t(locale, 'customers.saveCustomer')}</button>
+  1002→            </div>
+  1003→          </div>
+  1004→        </div>
+  1005→      )}
+  1006→    </div>
+  1007→  );
+  1008→
+  1009→  // ============================================
+  1010→  // RENDER: M-PESA
+  1011→  // ============================================
+  1012→  const renderMpesa = () => (
+  1013→    <div className="space-y-4">
+  1014→      <div className="flex items-center justify-between"><h2 className="text-xl font-bold">{t(locale, 'mpesa.title')}</h2>
+  1015→        <button onClick={async () => { await fetch('/api/mpesa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile', businessId }) }); fetchMpesa(); showToast('Reconciliation complete', 'success'); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><RefreshCw className="w-4 h-4" /> {t(locale, 'mpesa.reconcileNow')}</button>
+  1016→      </div>
+  1017→      {mpesaTransactions.length === 0 ? <div className="text-center py-12 text-muted-foreground"><CreditCard className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>{t(locale, 'mpesa.noTransactions')}</p></div> : (
+  1018→        <div className="space-y-2">{mpesaTransactions.map(txn => (
+  1019→          <div key={txn.id} className="bg-card border border-border rounded-xl p-4">
+  1020→            <div className="flex items-center justify-between">
+  1021→              <div className="flex items-center gap-3"><StatusBadge status={txn.status} /><div><p className="font-medium text-sm">{txn.phoneNumber}</p><p className="text-xs text-muted-foreground">{new Date(txn.createdAt).toLocaleString()}</p></div></div>
+  1022→              <div className="text-right"><p className="font-bold text-sm">{formatCurrency(txn.amount)}</p>
+  1023→                <div className="flex items-center gap-2 mt-1 justify-end">{txn.mpesaReceipt && <span className="text-xs font-mono text-green-600">{txn.mpesaReceipt}</span>}
+  1024→                  {txn.reconciled ? <span className="text-xs text-green-600 font-medium">Matched</span> : <span className="text-xs text-yellow-600 font-medium">Unmatched</span>}
+  1025→                </div>
+  1026→                {txn.invoice && <p className="text-[10px] text-muted-foreground mt-1">→ {txn.invoice.invoiceNumber}</p>}
+  1027→              </div>
+  1028→            </div>
+  1029→          </div>
+  1030→        ))}</div>
+  1031→      )}
+  1032→    </div>
+  1033→  );
+  1034→
+  1035→  // ============================================
+  1036→  // RENDER: REPORTS (NEW - the big undersell)
+  1037→  // ============================================
+  1038→  const renderReports = () => {
+  1039→    if (!dashboard) return <div className="flex items-center justify-center h-64"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>;
+  1040→    const tabs = [{ key: 'sales' as const, label: 'Sales', icon: <TrendingUp className="w-4 h-4" /> }, { key: 'vat' as const, label: 'VAT Return', icon: <FileSpreadsheet className="w-4 h-4" /> }, { key: 'pnl' as const, label: 'Profit & Loss', icon: <PiggyBank className="w-4 h-4" /> }, { key: 'products' as const, label: 'Products', icon: <BoxIcon className="w-4 h-4" /> }];
+  1041→    const maxSales = Math.max(...dashboard.dailyTrend.map(d => d.sales), 1);
+  1042→
+  1043→    return (
+  1044→      <div className="space-y-5">
+  1045→        <div className="flex items-center justify-between"><h2 className="text-xl font-bold">Reports & Analytics</h2>
+  1046→          <button onClick={async () => { const csvRows = [['Type','Description','Amount','VAT','Date']]; invoices.filter(i => i.status !== 'cancelled').forEach(i => csvRows.push(['Sale', i.invoiceNumber, String(i.totalAmount), String(i.totalVat), new Date(i.createdAt).toLocaleDateString()])); purchases.forEach(p => csvRows.push(['Purchase', p.description, String(p.totalAmount), String(p.totalVat), new Date(p.purchaseDate).toLocaleDateString()])); const blob = new Blob([csvRows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `parcy-report-${Date.now()}.csv`; a.click(); showToast('Report exported!', 'success'); }} className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Download className="w-4 h-4" /> Export CSV</button>
+  1047→        </div>
+  1048→
+  1049→        <div className="flex gap-2 border-b border-border pb-1">
+  1050→          {tabs.map(tab => (
+  1051→            <button key={tab.key} onClick={() => setReportTab(tab.key)} className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition ${reportTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+  1052→              {tab.icon} {tab.label}
+  1053→            </button>
+  1054→          ))}
+  1055→        </div>
+  1056→
+  1057→        {reportTab === 'sales' && (
+  1058→          <div className="space-y-4">
+  1059→            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1060→              <div className="bg-card rounded-xl p-4 border border-border"><p className="text-xs text-muted-foreground">Today</p><p className="text-2xl font-bold text-primary">{formatCurrency(dashboard.sales.todaySales)}</p></div>
+  1061→              <div className="bg-card rounded-xl p-4 border border-border"><p className="text-xs text-muted-foreground">This Week</p><p className="text-2xl font-bold">{formatCurrency(dashboard.sales.weekSales)}</p></div>
+  1062→              <div className="bg-card rounded-xl p-4 border border-border"><p className="text-xs text-muted-foreground">This Month</p><p className="text-2xl font-bold">{formatCurrency(dashboard.sales.totalSales)}</p></div>
+  1063→              <div className="bg-card rounded-xl p-4 border border-border"><p className="text-xs text-muted-foreground">Avg Invoice</p><p className="text-2xl font-bold">{formatCurrency(dashboard.sales.averageInvoiceValue)}</p></div>
+  1064→            </div>
+  1065→            <div className="bg-card rounded-xl border border-border p-6">
+  1066→              <h3 className="font-bold text-sm mb-4">7-Day Sales Trend</h3>
+  1067→              <MiniBarChart data={dashboard.dailyTrend.map(d => d.sales)} maxValue={maxSales} color="bg-emerald-500" />
+  1068→              <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">{dashboard.dailyTrend.map(d => <span key={d.date}>{d.date}</span>)}</div>
+  1069→            </div>
+  1070→            <div className="bg-card rounded-xl border border-border p-6">
+  1071→              <h3 className="font-bold text-sm mb-4">Payment Method Breakdown</h3>
+  1072→              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1073→                {[{ label: 'Cash', value: dashboard.sales.paymentBreakdown.cash, icon: <DollarSign className="w-5 h-5" />, color: 'text-emerald-600' }, { label: 'M-Pesa', value: dashboard.sales.paymentBreakdown.mpesa, icon: <Phone className="w-5 h-5" />, color: 'text-green-600' }, { label: 'Bank', value: dashboard.sales.paymentBreakdown.bank, icon: <CreditCard className="w-5 h-5" />, color: 'text-blue-600' }, { label: 'Credit', value: dashboard.sales.paymentBreakdown.credit, icon: <Clock className="w-5 h-5" />, color: 'text-orange-600' }].map(pm => (
+  1074→                  <div key={pm.label} className="text-center p-3 bg-muted rounded-lg"><div className={`${pm.color} mx-auto mb-2`}>{pm.icon}</div><p className="font-bold">{formatCurrency(pm.value)}</p><p className="text-xs text-muted-foreground">{pm.label}</p></div>
+  1075→                ))}
+  1076→              </div>
+  1077→            </div>
+  1078→          </div>
+  1079→        )}
+  1080→
+  1081→        {reportTab === 'vat' && (
+  1082→          <div className="space-y-4">
+  1083→            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 dark:from-blue-800 dark:to-indigo-900 rounded-2xl p-6 text-white">
+  1084→              <h3 className="font-bold flex items-center gap-2"><FileSpreadsheet className="w-5 h-5" /> VAT Return Summary</h3>
+  1085→              <p className="text-blue-200 text-xs mt-1">Period: {dashboard.vatReturn.period}</p>
+  1086→              <div className="grid grid-cols-3 gap-4 mt-4">
+  1087→                <div className="bg-white/10 rounded-xl p-4 text-center"><p className="text-xs text-blue-200">Output VAT (Sales)</p><p className="text-2xl font-bold mt-1">{formatCurrency(dashboard.vatReturn.vatPayable)}</p></div>
+  1088→                <div className="bg-white/10 rounded-xl p-4 text-center"><p className="text-xs text-blue-200">Input VAT (Purchases)</p><p className="text-2xl font-bold mt-1">{formatCurrency(dashboard.vatReturn.vatRecoverable)}</p></div>
+  1089→                <div className="bg-white/10 rounded-xl p-4 text-center"><p className="text-xs text-blue-200">Net VAT Payable</p><p className={`text-2xl font-bold mt-1 ${dashboard.vatReturn.netVat >= 0 ? 'text-yellow-200' : 'text-green-200'}`}>{formatCurrency(dashboard.vatReturn.netVat)}</p></div>
+  1090→              </div>
+  1091→              {dashboard.vatReturn.netVat > 0 && <p className="text-xs text-yellow-200 mt-3 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> You owe KRA {formatCurrency(dashboard.vatReturn.netVat)} in VAT this period</p>}
+  1092→              {dashboard.vatReturn.netVat < 0 && <p className="text-xs text-green-200 mt-3 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> You have a VAT credit of {formatCurrency(Math.abs(dashboard.vatReturn.netVat))}</p>}
+  1093→            </div>
+  1094→            <div className="bg-card rounded-xl border border-border p-5">
+  1095→              <h3 className="font-bold text-sm mb-3">Purchase Compliance Impact</h3>
+  1096→              <div className="space-y-2 text-sm">
+  1097→                <div className="flex justify-between"><span className="text-muted-foreground">Compliant supplier purchases</span><span className="font-medium text-green-600">{dashboard.purchases.compliant} ({dashboard.purchases.complianceRate}%)</span></div>
+  1098→                <div className="flex justify-between"><span className="text-muted-foreground">Non-compliant purchases</span><span className="font-medium text-yellow-600">{dashboard.purchases.nonCompliant}</span></div>
+  1099→                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Non-compliant purchase expenses risk being disallowed by KRA, increasing your tax liability</p>
+  1100→              </div>
+  1101→            </div>
+  1102→          </div>
+  1103→        )}
+  1104→
+  1105→        {reportTab === 'pnl' && (
+  1106→          <div className="space-y-4">
+  1107→            <div className="bg-card rounded-xl border border-border p-6">
+  1108→              <h3 className="font-bold text-sm mb-4">Profit & Loss Statement</h3>
+  1109→              <div className="space-y-3">
+  1110→                <div className="flex justify-between items-center py-2"><span className="font-medium">Revenue (Sales)</span><span className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(dashboard.profitLoss.revenue)}</span></div>
+  1111→                <div className="flex justify-between items-center py-2 border-t border-border"><span className="text-muted-foreground">Cost of Goods Sold</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(dashboard.profitLoss.costOfGoods)}</span></div>
+  1112→                <div className="flex justify-between items-center py-2 border-t-2 border-border"><span className="font-bold">Gross Profit</span><div className="text-right"><span className={`text-lg font-bold ${dashboard.profitLoss.grossProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{formatCurrency(dashboard.profitLoss.grossProfit)}</span><p className="text-xs text-muted-foreground">Margin: {dashboard.profitLoss.grossProfitMargin}%</p></div></div>
+  1113→                <div className="flex justify-between items-center py-2 border-t border-border"><span className="text-muted-foreground">Net VAT Payable</span><span className={dashboard.profitLoss.netVat >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>{dashboard.profitLoss.netVat >= 0 ? '-' : '+'}{formatCurrency(Math.abs(dashboard.profitLoss.netVat))}</span></div>
+  1114→              </div>
+  1115→            </div>
+  1116→            <div className="bg-card rounded-xl border border-border p-5">
+  1117→              <h3 className="font-bold text-sm mb-3">Gross Margin Analysis</h3>
+  1118→              <div className="w-full bg-muted rounded-full h-4 overflow-hidden">
+  1119→                <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-700 flex items-center justify-center text-[10px] font-bold text-white" style={{ width: `${Math.max(dashboard.profitLoss.grossProfitMargin, 5)}%` }}>
+  1120→                  {dashboard.profitLoss.grossProfitMargin}%
+  1121→                </div>
+  1122→              </div>
+  1123→              <div className="flex justify-between mt-2 text-xs text-muted-foreground"><span>0%</span><span>50%</span><span>100%</span></div>
+  1124→            </div>
+  1125→          </div>
+  1126→        )}
+  1127→
+  1128→        {reportTab === 'products' && (
+  1129→          <div className="space-y-4">
+  1130→            <div className="bg-card rounded-xl border border-border p-6">
+  1131→              <h3 className="font-bold text-sm mb-4">Top Selling Products</h3>
+  1132→              {dashboard.topProducts.length === 0 ? <p className="text-sm text-muted-foreground">No sales data yet</p> : (
+  1133→                <div className="space-y-3">{dashboard.topProducts.map((p, i) => {
+  1134→                  const maxRev = dashboard.topProducts[0]?.revenue || 1;
+  1135→                  const pct = Math.round((p.revenue / maxRev) * 100);
+  1136→                  return (
+  1137→                    <div key={p.id} className="flex items-center gap-3">
+  1138→                      <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+  1139→                      <div className="flex-1 min-w-0">
+  1140→                        <div className="flex justify-between items-baseline"><p className="text-sm font-medium truncate">{p.name}</p><span className="font-bold text-sm ml-2">{formatCurrency(p.revenue)}</span></div>
+  1141→                        <div className="flex items-center gap-2 mt-1"><div className="flex-1 bg-muted rounded-full h-1.5"><div className="bg-primary h-1.5 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} /></div><span className="text-[10px] text-muted-foreground shrink-0">{Math.ceil(p.quantity)} sold</span></div>
+  1142→                      </div>
+  1143→                    </div>
+  1144→                  );
+  1145→                })}</div>
+  1146→              )}
+  1147→            </div>
+  1148→          </div>
+  1149→        )}
+  1150→      </div>
+  1151→    );
+  1152→  };
+  1153→
+  1154→  // ============================================
+  1155→  // RENDER: EXPENSE VALIDATION (THE MOAT)
+  1156→  // ============================================
+  1157→  const renderExpenseCheck = () => {
+  1158→    if (!expenseValidation) return <div className="flex items-center justify-center h-64"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>;
+  1159→    const ev = expenseValidation;
+  1160→
+  1161→    return (
+  1162→      <div className="space-y-5">
+  1163→        {/* Hero: Compliance Status */}
+  1164→        <div className={`rounded-2xl p-6 text-white relative overflow-hidden ${
+  1165→          ev.overallStatus === 'good' ? 'bg-gradient-to-br from-emerald-600 to-teal-600' :
+  1166→          ev.overallStatus === 'warning' ? 'bg-gradient-to-br from-amber-600 to-orange-600' :
+  1167→          'bg-gradient-to-br from-red-600 to-rose-700'}`}>
+  1168→          <div className="absolute -right-4 -bottom-4 opacity-10"><Shield className="w-32 h-32" /></div>
+  1169→          <div className="flex items-center gap-4">
+  1170→            <div className="relative">
+  1171→              <ProgressRing value={ev.complianceRate} size={80} strokeWidth={8}
+  1172→                color={ev.overallStatus === 'good' ? '#4ade80' : ev.overallStatus === 'warning' ? '#fbbf24' : '#f87171'} />
+  1173→              <span className="absolute inset-0 flex items-center justify-center text-xl font-bold">{ev.complianceRate}%</span>
+  1174→            </div>
+  1175→            <div>
+  1176→              <h2 className="text-2xl font-bold">KRA Expense Validation</h2>
+  1177→              <p className="text-sm opacity-90 mt-0.5">
+  1178→                {ev.overallStatus === 'good' ? 'Your expenses are likely to pass KRA validation' :
+  1179→                 ev.overallStatus === 'warning' ? 'Some expenses may be challenged by KRA' :
+  1180→                 'Critical issues found — expenses at risk of disallowance'}
+  1181→              </p>
+  1182→              <p className="text-xs opacity-70 mt-1">Period: {ev.period?.from} — {ev.period?.to}</p>
+  1183→            </div>
+  1184→          </div>
+  1185→        </div>
+  1186→
+  1187→        {/* Financial Impact Summary */}
+  1188→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  1189→          <div className="bg-card rounded-xl border border-border p-5">
+  1190→            <p className="text-xs text-muted-foreground">Total Expenses</p>
+  1191→            <p className="text-2xl font-bold mt-1">{formatCurrency(ev.totalExpenses)}</p>
+  1192→            <p className="text-xs text-muted-foreground mt-1">This year</p>
+  1193→          </div>
+  1194→          <div className="bg-card rounded-xl border border-border p-5">
+  1195→            <p className="text-xs text-muted-foreground">Compliant Expenses</p>
+  1196→            <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(ev.compliantExpenses)}</p>
+  1197→            <p className="text-xs text-muted-foreground mt-1">{ev.complianceRate}% of total</p>
+  1198→          </div>
+  1199→          <div className={`rounded-xl border p-5 ${ev.atRiskAmount > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-card border-border'}`}>
+  1200→            <p className="text-xs text-muted-foreground">At-Risk Amount</p>
+  1201→            <p className={`text-2xl font-bold mt-1 ${ev.atRiskAmount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(ev.atRiskAmount)}</p>
+  1202→            <p className="text-xs text-muted-foreground mt-1">{ev.atRiskAmount > 0 ? `~KES ${formatCurrency(ev.estimatedTaxRisk)} extra tax risk` : 'No risk detected'}</p>
+  1203→          </div>
+  1204→        </div>
+  1205→
+  1206→        {/* KRA Validation Note */}
+  1207→        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3">
+  1208→          <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+  1209→          <div>
+  1210→            <p className="text-sm font-medium text-blue-800 dark:text-blue-300">KRA Expense Validation is Now Active</p>
+  1211→            <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">{ev.kraValidationNote}</p>
+  1212→          </div>
+  1213→        </div>
+  1214→
+  1215→        {/* Validation Checks */}
+  1216→        <div className="space-y-3">
+  1217→          <h3 className="font-bold text-lg flex items-center gap-2">
+  1218→            <Shield className="w-5 h-5 text-primary" /> Validation Results
+  1219→            <span className="text-sm font-normal text-muted-foreground">({ev.summary.critical} critical, {ev.summary.warnings} warnings)</span>
+  1220→          </h3>
+  1221→          {ev.checks.length === 0 ? (
+  1222→            <div className="text-center py-12 bg-card rounded-xl border border-border">
+  1223→              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+  1224→              <p className="font-medium">All Checks Passed</p>
+  1225→              <p className="text-sm text-muted-foreground mt-1">Your expenses are compliant with KRA requirements</p>
+  1226→            </div>
+  1227→          ) : ev.checks.map((check: any) => (
+  1228→            <div key={check.id} className={`rounded-xl border p-5 transition hover:shadow-sm ${
+  1229→              check.severity === 'critical' ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800' :
+  1230→              check.severity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800' :
+  1231→              'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+  1232→            }`}>
+  1233→              <div className="flex items-start gap-3">
+  1234→                {check.severity === 'critical' ? <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" /> :
+  1235→                 check.severity === 'warning' ? <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" /> :
+  1236→                 <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />}
+  1237→                <div className="flex-1">
+  1238→                  <div className="flex items-center justify-between">
+  1239→                    <h4 className="font-bold text-sm">{check.title}</h4>
+  1240→                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+  1241→                      check.severity === 'critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+  1242→                      check.severity === 'warning' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+  1243→                      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+  1244→                    }`}>{check.severity}</span>
+  1245→                  </div>
+  1246→                  <p className="text-sm text-muted-foreground mt-1">{check.description}</p>
+  1247→                  <p className="text-xs font-medium mt-2">Financial Impact: {check.financialImpact}</p>
+  1248→                  <p className="text-xs text-muted-foreground mt-1">Recommendation: {check.recommendation}</p>
+  1249→
+  1250→                  {/* Affected items */}
+  1251→                  {check.affectedItems && check.affectedItems.length > 0 && (
+  1252→                    <div className="mt-3 pt-3 border-t border-border/50 space-y-1 max-h-32 overflow-y-auto">
+  1253→                      {check.affectedItems.map((item: any, i: number) => (
+  1254→                        <div key={i} className="flex items-center justify-between text-xs">
+  1255→                          <span className="text-muted-foreground truncate flex-1">{item.description}</span>
+  1256→                          {item.amount > 0 && <span className="font-medium ml-2">{formatCurrency(item.amount)}</span>}
+  1257→                          {item.date && <span className="text-muted-foreground ml-2">{item.date}</span>}
+  1258→                        </div>
+  1259→                      ))}
+  1260→                    </div>
+  1261→                  )}
+  1262→                </div>
+  1263→              </div>
+  1264→            </div>
+  1265→          ))}
+  1266→        </div>
+  1267→      </div>
+  1268→    );
+  1269→  };
+  1270→
+  1271→  // ============================================
+  1272→  // RENDER: CREDIT NOTE MODAL
+  1273→  // ============================================
+  1274→  const renderCreditNoteModal = () => {
+  1275→    if (!showCreditNote || !creditNoteInvoice) return null;
+  1276→    return (
+  1277→      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCreditNote(false)}>
+  1278→        <div className="bg-card rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+  1279→          <div className="flex items-center justify-between mb-4">
+  1280→            <h3 className="font-bold text-lg">{creditNoteType === 'credit_note' ? 'Issue Credit Note' : 'Issue Debit Note'}</h3>
+  1281→            <button onClick={() => setShowCreditNote(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button>
+  1282→          </div>
+  1283→          <div className="space-y-4">
+  1284→            <div className="bg-muted rounded-xl p-4 space-y-1 text-sm">
+  1285→              <p className="font-medium">Original Invoice</p>
+  1286→              <p className="text-muted-foreground">{creditNoteInvoice.invoiceNumber} — {creditNoteInvoice.buyerName || 'Walk-in'}</p>
+  1287→              <p className="font-bold text-primary">{formatCurrency(creditNoteInvoice.totalAmount)}</p>
+  1288→            </div>
+  1289→            <div>
+  1290→              <label className="text-xs text-muted-foreground">Note Type</label>
+  1291→              <div className="grid grid-cols-2 gap-2 mt-1">
+  1292→                <button onClick={() => setCreditNoteType('credit_note')} className={`px-3 py-2 text-sm rounded-lg border transition font-medium ${creditNoteType === 'credit_note' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground'}`}>Credit Note (Refund)</button>
+  1293→                <button onClick={() => setCreditNoteType('debit_note')} className={`px-3 py-2 text-sm rounded-lg border transition font-medium ${creditNoteType === 'debit_note' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground'}`}>Debit Note (Additional)</button>
+  1294→              </div>
+  1295→            </div>
+  1296→            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 text-xs text-yellow-700 dark:text-yellow-300">
+  1297→              <p className="font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Important</p>
+  1298→              <p className="mt-0.5">Credit/debit notes must reference the exact original invoice. The note total cannot exceed the original invoice amount. This will be synced to KRA eTIMS.</p>
+  1299→            </div>
+  1300→            <button onClick={async () => {
+  1301→              try {
+  1302→                const r = await fetch('/api/invoices/credit-note', {
+  1303→                  method: 'POST',
+  1304→                  headers: { 'Content-Type': 'application/json' },
+  1305→                  body: JSON.stringify({ businessId, originalInvoiceId: creditNoteInvoice.id, type: creditNoteType }),
+  1306→                });
+  1307→                const d = await r.json();
+  1308→                if (!r.ok) throw new Error(d.error);
+  1309→                setShowCreditNote(false);
+  1310→                setCreditNoteInvoice(null);
+  1311→                fetchInvoices();
+  1312→                showToast(`${creditNoteType === 'credit_note' ? 'Credit' : 'Debit'} note created!`, 'success');
+  1313→              } catch (err: any) { showToast(err.message, 'error'); }
+  1314→            }} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">
+  1315→              Create {creditNoteType === 'credit_note' ? 'Credit' : 'Debit'} Note
+  1316→            </button>
+  1317→          </div>
+  1318→        </div>
+  1319→      </div>
+  1320→    );
+  1321→  };
+  1322→
+  1323→  // ============================================
+  1324→  // RENDER: SETTINGS
+  1325→  // ============================================
+  1326→  const [settingsData, setSettingsData] = useState<any>(null);
+  1327→  const [settingsForm, setSettingsForm] = useState({ name: '', email: '', phone: '', address: '', language: 'en', currentTier: 'free', receiptFooter: '' });
+  1328→  useEffect(() => {
+  1329→    if (currentView === 'settings' && businessId) {
+  1330→      fetch(`/api/settings?businessId=${businessId}`).then(r => r.json()).then(data => {
+  1331→        setSettingsData(data);
+  1332→        if (data.business) setSettingsForm({ name: data.business.name || '', email: data.business.email || '', phone: data.business.phone || '', address: data.business.address || '', language: data.business.language || 'en', currentTier: data.business.currentTier || 'free', receiptFooter: data.business.receiptFooter || '' });
+  1333→      }).catch(console.error);
+  1334→    }
+  1335→  }, [currentView, businessId]);
+  1336→
+  1337→  const renderSettings = () => (
+  1338→    <div className="space-y-5 max-w-2xl">
+  1339→      <h2 className="text-xl font-bold">{t(locale, 'settings.title')}</h2>
+  1340→      <div className="bg-card border border-border rounded-2xl p-6">
+  1341→        <h3 className="font-semibold mb-4 flex items-center gap-2"><Store className="w-5 h-5 text-primary" /> {t(locale, 'settings.businessProfile')}</h3>
+  1342→        <div className="space-y-3">
+  1343→          <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.businessName')}</label><input type="text" value={settingsForm.name} onChange={e => setSettingsForm(f => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1344→          <div className="grid grid-cols-2 gap-3">
+  1345→            <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.email')}</label><input type="email" value={settingsForm.email} onChange={e => setSettingsForm(f => ({ ...f, email: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1346→            <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.phone')}</label><input type="tel" value={settingsForm.phone} onChange={e => setSettingsForm(f => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1347→          </div>
+  1348→          <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.address')}</label><input type="text" value={settingsForm.address} onChange={e => setSettingsForm(f => ({ ...f, address: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1349→          <div><label className="text-xs text-muted-foreground">Receipt Footer</label><input type="text" value={settingsForm.receiptFooter} onChange={e => setSettingsForm(f => ({ ...f, receiptFooter: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1350→        </div>
+  1351→      </div>
+  1352→      <div className="bg-card border border-border rounded-2xl p-6">
+  1353→        <h3 className="font-semibold mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-primary" /> {t(locale, 'settings.kraCredentials')}</h3>
+  1354→        <div className="space-y-3">
+  1355→          <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.kraUsername')}</label><input type="text" defaultValue={settingsData?.settings?.kra_username || ''} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1356→          <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.kraPassword')}</label><input type="password" placeholder="Enter password" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1357→        </div>
+  1358→      </div>
+  1359→      <div className="bg-card border border-border rounded-2xl p-6">
+  1360→        <h3 className="font-semibold mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-primary" /> {t(locale, 'settings.mpesaConfig')}</h3>
+  1361→        <div className="space-y-3">
+  1362→          <div className="grid grid-cols-2 gap-3">
+  1363→            <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.consumerKey')}</label><input type="text" defaultValue={settingsData?.settings?.mpesa_consumer_key || ''} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1364→            <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.consumerSecret')}</label><input type="password" placeholder="Enter secret" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1365→          </div>
+  1366→          <div className="grid grid-cols-2 gap-3">
+  1367→            <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.paybillNumber')}</label><input type="text" defaultValue={settingsData?.settings?.mpesa_paybill || '174379'} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1368→            <div><label className="text-xs text-muted-foreground">{t(locale, 'settings.passkey')}</label><input type="password" placeholder="Enter passkey" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+  1369→          </div>
+  1370→        </div>
+  1371→      </div>
+  1372→      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1373→        <div className="bg-card border border-border rounded-2xl p-6">
+  1374→          <h3 className="font-semibold mb-4 flex items-center gap-2"><Globe className="w-5 h-5 text-primary" /> {t(locale, 'settings.language')}</h3>
+  1375→          <div className="grid grid-cols-2 gap-2">{['en', 'sw'].map(lang => (
+  1376→            <button key={lang} onClick={() => { setSettingsForm(f => ({ ...f, language: lang })); setLocale(lang as Locale); }} className={`py-2.5 px-3 rounded-xl text-sm border transition font-medium ${settingsForm.language === lang ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground'}`}>{lang === 'en' ? 'English' : 'Kiswahili'}</button>
+  1377→          ))}</div>
+  1378→        </div>
+  1379→        <div className="bg-card border border-border rounded-2xl p-6">
+  1380→          <h3 className="font-semibold mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-primary" /> {t(locale, 'settings.pricingPlan')}</h3>
+  1381→          <div className="space-y-2">{settingsData?.tiers && Object.entries(settingsData.tiers).map(([key, tier]: [string, any]) => (
+  1382→            <button key={key} onClick={() => setSettingsForm(f => ({ ...f, currentTier: key }))} className={`w-full text-left p-3 rounded-xl border text-sm transition ${settingsForm.currentTier === key ? 'bg-primary/10 border-primary' : 'border-border hover:border-primary/50'}`}>
+  1383→              <div className="flex justify-between items-center"><span className="font-medium">{tier.name}</span><span className="font-bold">{tier.price === 0 ? 'Free' : `KES ${tier.price}/mo`}</span></div>
+  1384→              <p className="text-xs text-muted-foreground mt-0.5">{tier.features.slice(0, 2).join(' • ')}</p>
+  1385→            </button>
+  1386→          ))}</div>
+  1387→        </div>
+  1388→      </div>
+  1389→      <button onClick={async () => { try { const r = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, business: settingsForm }) }); if (!r.ok) throw new Error((await r.json()).error); showToast(t(locale, 'settings.saved'), 'success'); } catch (err: any) { showToast(err.message, 'error'); } }} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"><Save className="w-5 h-5" /> {t(locale, 'settings.save')}</button>
+  1390→    </div>
+  1391→  );
+  1392→
+  1393→  // ============================================
+  1394→  // MAIN RENDER
+  1395→  // ============================================
+  1396→  const notifCount = dashboard?.notifications.filter(n => n.type === 'error' || n.type === 'warning').length || 0;
+  1397→
+  1398→  return (
+  1399→    <div className="flex min-h-screen">
+  1400→      {renderSidebar()}
+  1401→      {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
+  1402→      <main className="flex-1 min-w-0">
+  1403→        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3 flex items-center justify-between">
+  1404→          <div className="flex items-center gap-3">
+  1405→            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 hover:bg-muted rounded"><Menu className="w-5 h-5" /></button>
+  1406→            <h2 className="font-semibold text-lg">{t(locale, `nav.${currentView}` as any)}</h2>
+  1407→          </div>
+  1408→          <div className="flex items-center gap-2">
+  1409→            {!isOnline && <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-1 rounded-full flex items-center gap-1 font-medium"><WifiOff className="w-3 h-3" /> Offline</span>}
+  1410→            <button onClick={() => { fetchDashboard(); setShowNotifications(true); }} className="relative p-2 hover:bg-muted rounded-lg">
+  1411→              <Bell className="w-4 h-4" />
+  1412→              {notifCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full flex items-center justify-center">{notifCount}</span>}
+  1413→            </button>
+  1414→            <button onClick={() => setIsDark(d => !d)} className="p-2 hover:bg-muted rounded-lg">{isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}</button>
+  1415→            <button onClick={() => setLocale(l => l === 'en' ? 'sw' : 'en')} className="px-2 py-1 text-xs bg-muted rounded-lg hover:bg-primary/10 font-medium">{locale === 'en' ? 'SW' : 'EN'}</button>
+  1416→          </div>
+  1417→        </header>
+  1418→        <div className="p-4 md:p-6 max-w-7xl mx-auto">
+  1419→          {currentView === 'dashboard' && renderDashboard()}
+  1420→          {currentView === 'pos' && renderPOS()}
+  1421→          {currentView === 'invoices' && renderInvoices()}
+  1422→          {currentView === 'purchases' && renderPurchases()}
+  1423→          {currentView === 'products' && renderProducts()}
+  1424→          {currentView === 'suppliers' && renderSuppliers()}
+  1425→          {currentView === 'customers' && renderCustomers()}
+  1426→          {currentView === 'mpesa' && renderMpesa()}
+  1427→          {currentView === 'reports' && renderReports()}
+  1428→          {currentView === 'expense-check' && renderExpenseCheck()}
+  1429→          {currentView === 'settings' && renderSettings()}
+  1430→        </div>
+  1431→      </main>
+  1432→
+  1433→      {renderWelcome()}
+  1434→      {renderNotifications()}
+  1435→      {renderCreditNoteModal()}
+  1436→
+  1437→      {toast && (
+  1438→        <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 ${toast.type === 'success' ? 'bg-emerald-600 text-white' : toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-amber-600 text-white'}`}>
+  1439→          {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : toast.type === 'error' ? <XCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+  1440→          {toast.message}
+  1441→        </div>
+  1442→      )}
+  1443→    </div>
+  1444→  );
+  1445→}
+  1446→

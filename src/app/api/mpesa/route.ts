@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
       const result = await initiateSTKPush({
         phoneNumber,
         amount: parseFloat(amount),
-        accountReference: accountReference || `PARCY-${Date.now()}`,
-        transactionDesc: transactionDesc || 'Parcy POS Payment',
+        accountReference: accountReference || `SOKONI-${Date.now()}`,
+        transactionDesc: transactionDesc || 'Sokoni POS Payment',
         invoiceId,
         businessId,
       });

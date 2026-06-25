@@ -1,4 +1,4 @@
-// Parcy POS - KRA eTIMS Compliant Point of Sale System
+// Sokoni POS - KRA eTIMS Compliant Point of Sale System
 // Comprehensive database schema for offline-first, two-way compliance
 
 generator client {

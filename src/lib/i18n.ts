@@ -1,4 +1,4 @@
-// Parcy POS - Internationalization System
+// Sokoni POS - Internationalization System
 // Full English / Kiswahili support for Kenya market
 
 export type Locale = 'en' | 'sw';
@@ -6,7 +6,7 @@ export type Locale = 'en' | 'sw';
 export const translations = {
   en: {
     // App
-    appName: 'Parcy',
+    appName: 'Sokoni',
     appTagline: 'KRA eTIMS Compliant POS',
     
     // Navigation
@@ -267,7 +267,7 @@ export const translations = {
   
   sw: {
     // App
-    appName: 'Parcy',
+    appName: 'Sokoni',
     appTagline: 'POS ya KRA eTIMS',
     
     // Navigation

@@ -1,4 +1,4 @@
-// Parcy POS - M-Pesa Daraja API Integration Service
+// Sokoni POS - M-Pesa Daraja API Integration Service
 // Sandbox implementation with STK Push & auto-reconciliation
 
 import { db } from './db';

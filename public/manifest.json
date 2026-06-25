@@ -1,6 +1,6 @@
 {
-  "name": "Parcy POS",
-  "short_name": "Parcy",
+  "name": "Sokoni POS",
+  "short_name": "Sokoni",
   "description": "KRA eTIMS Compliant Point of Sale",
   "start_url": "/",
   "display": "standalone",

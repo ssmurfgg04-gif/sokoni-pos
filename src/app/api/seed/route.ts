@@ -1,4 +1,4 @@
-// Seed the database with demo data for Parcy POS
+// Seed the database with demo data for Sokoni POS
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
@@ -13,9 +13,9 @@ export async function POST() {
     // Create demo business
     const business = await db.business.create({
       data: {
-        name: 'Parcy Demo Store',
+        name: 'Sokoni Demo Store',
         kraPin: 'A001234567B',
-        email: 'demo@parcy.co.ke',
+        email: 'demo@sokoni.co.ke',
         phone: '254712345678',
         address: 'Moi Avenue, Nairobi, Kenya',
         county: 'Nairobi',
