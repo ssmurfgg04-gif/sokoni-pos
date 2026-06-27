@@ -493,6 +493,33 @@ export async function POST() {
       db.settings.create({
         data: { businessId: business.id, key: 'kra_password', value: 'sandbox_pass', isSecret: true },
       }),
+
+      // Demo staff members
+      db.staff.create({
+        data: { businessId: business.id, name: 'Alice Wanjiku', phone: '254712345001', pin: '1234', role: 'owner', canRefund: true, canDiscount: true, canEditPrice: true, canVoid: true, canViewReports: true, canManageStock: true },
+      }),
+      db.staff.create({
+        data: { businessId: business.id, name: 'Brian Ochieng', phone: '254712345002', pin: '5678', role: 'manager', canRefund: true, canDiscount: true, canEditPrice: false, canVoid: false, canViewReports: true, canManageStock: true },
+      }),
+      db.staff.create({
+        data: { businessId: business.id, name: 'Cynthia Akinyi', phone: '254712345003', pin: '9012', role: 'cashier', canRefund: false, canDiscount: false, canEditPrice: false, canVoid: false, canViewReports: false, canManageStock: false },
+      }),
+
+      // Demo branches
+      db.branch.create({
+        data: { businessId: business.id, name: 'Main Branch - Nairobi CBD', location: 'Moi Avenue, Nairobi', county: 'Nairobi', phone: '254712345678' },
+      }),
+      db.branch.create({
+        data: { businessId: business.id, name: 'Westlands Branch', location: 'Westlands Road, Nairobi', county: 'Nairobi', phone: '254712345679' },
+      }),
+      db.branch.create({
+        data: { businessId: business.id, name: 'Mombasa Branch', location: 'Digo Road, Mombasa', county: 'Mombasa', phone: '254712345680' },
+      }),
+
+      // Demo active shift
+      db.shift.create({
+        data: { businessId: business.id, staffId: (await db.staff.findFirst({ where: { businessId: business.id, role: 'cashier' } }))!.id, clockIn: new Date(Date.now() - 4 * 60 * 60 * 1000), openingCash: 5000, cashPayments: 12500, mpesaPayments: 28900, totalSales: 41400, invoicesCreated: 12 },
+      }),
     ]);
 
     return NextResponse.json({
@@ -504,6 +531,8 @@ export async function POST() {
         customers: customers.length,
         suppliers: suppliers.length,
         invoices: invoices.length,
+        staff: 3,
+        branches: 3,
       },
     });
   } catch (error: any) {

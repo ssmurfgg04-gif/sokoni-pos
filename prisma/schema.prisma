@@ -44,6 +44,8 @@ model Business {
   mpesaTransactions MpesaTransaction[]
   syncQueue     SyncQueue[]
   settings      Settings[]
+  staff         Staff[]
+  branches     Branch[]
 }
 
 model Product {
@@ -406,4 +408,86 @@ model DailySnapshot {
 
   @@unique([businessId, date])
   @@index([businessId, date])
+}
+
+// ============================================
+// STAFF MANAGEMENT (Enterprise Tier)
+// ============================================
+
+model Staff {
+  id            String   @id @default(cuid())
+  businessId    String
+  name          String
+  email         String?
+  phone         String?
+  pin           String                      // 4-digit POS login PIN
+  role          String   @default("cashier") // owner | manager | cashier
+  isActive      Boolean  @default(true)
+  
+  // Permissions
+  canRefund     Boolean  @default(false)
+  canDiscount   Boolean  @default(false)
+  canEditPrice  Boolean  @default(false)
+  canVoid       Boolean  @default(false)
+  canViewReports Boolean @default(false)
+  canManageStock Boolean @default(false)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business     Business @relation(fields: [businessId], references: [id])
+  shifts       Shift[]
+
+  @@index([businessId])
+}
+
+model Shift {
+  id            String   @id @default(cuid())
+  businessId    String
+  staffId       String
+  branchId      String?                     // For multi-branch
+  clockIn       DateTime
+  clockOut      DateTime?
+  
+  // Cash drawer tracking
+  openingCash   Float    @default(0)
+  closingCash   Float?
+  expectedCash  Float?                      // Calculated from sales
+  cashVariance  Float?                      // Difference = closing - expected
+  cashPayments  Float    @default(0)         // Cash sales during shift
+  mpesaPayments Float    @default(0)         // M-Pesa sales during shift
+  
+  // Performance
+  invoicesCreated Int     @default(0)
+  totalSales    Float    @default(0)
+  refunds       Float    @default(0)
+  discounts     Float    @default(0)
+  
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  staff         Staff    @relation(fields: [staffId], references: [id])
+
+  @@index([businessId, staffId])
+  @@index([businessId, clockIn])
+}
+
+// ============================================
+// BRANCH MANAGEMENT (Enterprise Tier)
+// ============================================
+
+model Branch {
+  id            String   @id @default(cuid())
+  businessId    String
+  name          String
+  location      String?
+  county        String?
+  phone         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business     Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
 }

@@ -17,7 +17,7 @@ import POSView from '@/components/POSView';
 // ============================================
 // TYPES
 // ============================================
-type View = 'dashboard' | 'pos' | 'invoices' | 'purchases' | 'products' | 'suppliers' | 'customers' | 'mpesa' | 'reports' | 'expense-check' | 'settings';
+type View = 'dashboard' | 'pos' | 'invoices' | 'purchases' | 'products' | 'suppliers' | 'customers' | 'mpesa' | 'reports' | 'expense-check' | 'staff' | 'settings';
 
 interface Product {
   id: string; name: string; sku?: string; category?: string; unitPrice: number;
@@ -210,6 +210,18 @@ export default function SokoniPOS() {
   // Compliance health state
   const [complianceHealth, setComplianceHealth] = useState<any>(null);
 
+  // Staff & Shifts state
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [shiftHistory, setShiftHistory] = useState<any>(null);
+  const [showNewStaff, setShowNewStaff] = useState(false);
+  const [newStaff, setNewStaff] = useState({ name: '', phone: '', pin: '', role: 'cashier' });
+  const [staffPin, setStaffPin] = useState('');
+  const [showPinLogin, setShowPinLogin] = useState(false);
+  const [activeStaff, setActiveStaff] = useState<any>(null);
+
+  // Audit variance state
+  const [auditVariance, setAuditVariance] = useState<any>(null);
+
   // Credit note modal state
   const [showCreditNote, setShowCreditNote] = useState(false);
   const [creditNoteInvoice, setCreditNoteInvoice] = useState<Invoice | null>(null);
@@ -244,10 +256,13 @@ export default function SokoniPOS() {
   const fetchSuppliers = useCallback(async () => { if (!businessId) return; try { setSuppliers(await (await fetch(`/api/suppliers?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
   const fetchPurchases = useCallback(async () => { if (!businessId) return; try { setPurchases(await (await fetch(`/api/purchases?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
   const fetchMpesa = useCallback(async () => { if (!businessId) return; try { setMpesaTransactions(await (await fetch(`/api/mpesa?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+  const fetchStaff = useCallback(async () => { if (!businessId) return; try { setStaffList(await (await fetch(`/api/staff?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+  const fetchShifts = useCallback(async () => { if (!businessId) return; try { setShiftHistory(await (await fetch(`/api/staff/shifts?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+  const fetchAuditVariance = useCallback(async () => { if (!businessId) return; try { setAuditVariance(await (await fetch(`/api/compliance/audit-variance?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
 
   useEffect(() => {
     if (!businessId) return;
-    const f: Record<string, () => void> = { dashboard: fetchDashboard, pos: fetchProducts, invoices: () => fetchInvoices(), purchases: fetchPurchases, products: fetchProducts, suppliers: fetchSuppliers, customers: fetchCustomers, mpesa: fetchMpesa, reports: fetchDashboard, 'expense-check': async () => { await fetchDashboard(); try { const r = await fetch(`/api/expenses/validate?businessId=${businessId}`); const d = await r.json(); if (r.ok) setExpenseValidation(d); } catch {} try { const r = await fetch(`/api/compliance/health?businessId=${businessId}`); const d = await r.json(); if (r.ok) setComplianceHealth(d); } catch {} }, settings: () => {} };
+    const f: Record<string, () => void> = { dashboard: async () => { fetchDashboard(); fetchAuditVariance(); }, pos: fetchProducts, invoices: () => fetchInvoices(), purchases: fetchPurchases, products: fetchProducts, suppliers: fetchSuppliers, customers: fetchCustomers, mpesa: fetchMpesa, reports: fetchDashboard, 'expense-check': async () => { await fetchDashboard(); try { const r = await fetch(`/api/expenses/validate?businessId=${businessId}`); const d = await r.json(); if (r.ok) setExpenseValidation(d); } catch {} try { const r = await fetch(`/api/compliance/health?businessId=${businessId}`); const d = await r.json(); if (r.ok) setComplianceHealth(d); } catch {} fetchAuditVariance(); }, staff: async () => { fetchStaff(); fetchShifts(); }, settings: () => {} };
     f[currentView]?.();
   }, [currentView, businessId, fetchDashboard, fetchProducts, fetchInvoices, fetchPurchases, fetchSuppliers, fetchCustomers, fetchMpesa]);
 
@@ -304,6 +319,7 @@ export default function SokoniPOS() {
     { view: 'products', icon: <BarChart3 className="w-5 h-5" />, labelKey: 'nav.products' },
     { view: 'suppliers', icon: <Truck className="w-5 h-5" />, labelKey: 'nav.suppliers' },
     { view: 'customers', icon: <Users className="w-5 h-5" />, labelKey: 'nav.customers' },
+    { view: 'staff', icon: <Users className="w-5 h-5" />, labelKey: 'nav.staff' },
     { view: 'mpesa', icon: <CreditCard className="w-5 h-5" />, labelKey: 'nav.mpesa' },
     { view: 'reports', icon: <Activity className="w-5 h-5" />, labelKey: 'nav.reports' },
     { view: 'expense-check', icon: <Shield className="w-5 h-5" />, labelKey: 'nav.expense-check' },
@@ -432,7 +448,7 @@ export default function SokoniPOS() {
   const renderSidebar = () => {
     const navGroups = [
       { label: 'OPERATIONS', items: navItems.filter(i => ['pos', 'invoices', 'purchases'].includes(i.view)) },
-      { label: 'MANAGEMENT', items: navItems.filter(i => ['products', 'suppliers', 'customers'].includes(i.view)) },
+      { label: 'MANAGEMENT', items: navItems.filter(i => ['products', 'suppliers', 'customers', 'staff'].includes(i.view)) },
       { label: 'FINANCE', items: navItems.filter(i => ['mpesa', 'reports', 'expense-check'].includes(i.view)) },
       { label: 'SYSTEM', items: navItems.filter(i => i.view === 'settings') },
     ];
@@ -1099,6 +1115,190 @@ export default function SokoniPOS() {
   );
 
   // ============================================
+  // RENDER: STAFF & SHIFTS
+  // ============================================
+  const renderStaff = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold">Staff & Shifts</h2>
+        <button onClick={() => setShowNewStaff(true)} className="flex items-center gap-2 px-4 py-2 btn-primary rounded-lg text-sm"><Plus className="w-4 h-4" /> Add Staff</button>
+      </div>
+
+      {/* Active Shift Banner */}
+      {staffList.filter(s => s.isClockedIn).length > 0 && (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+          <p className="text-sm text-emerald-800 dark:text-emerald-300">
+            <strong>{staffList.filter(s => s.isClockedIn).length}</strong> staff clocked in: {staffList.filter(s => s.isClockedIn).map(s => s.name).join(', ')}
+          </p>
+        </div>
+      )}
+
+      {/* Staff Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {staffList.map(staff => (
+          <div key={staff.id} className="card-interactive rounded-xl p-5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${staff.role === 'owner' ? 'bg-primary/20 text-primary' : staff.role === 'manager' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-muted text-muted-foreground'}`}>
+                  {staff.name.split(' ').map(n => n[0]).join('')}
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{staff.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{staff.role} • PIN: {staff.pin}</p>
+                </div>
+              </div>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${staff.isClockedIn ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+                {staff.isClockedIn ? 'Clocked In' : 'Off Duty'}
+              </span>
+            </div>
+
+            {/* Permissions badges */}
+            <div className="flex flex-wrap gap-1 mt-3">
+              {staff.canRefund && <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded">Refund</span>}
+              {staff.canDiscount && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded">Discount</span>}
+              {staff.canViewReports && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded">Reports</span>}
+              {staff.canManageStock && <span className="text-[10px] bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 rounded">Stock</span>}
+            </div>
+
+            {/* Clock In/Out */}
+            <div className="mt-3 pt-3 border-t border-border">
+              {staff.isClockedIn ? (
+                <button onClick={async () => {
+                  try {
+                    const r = await fetch('/api/staff', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: staff.id, action: 'clock_out', closingCash: '0' }) });
+                    const d = await r.json();
+                    if (d.success) {
+                      const varianceMsg = d.variance !== 0 ? ` Cash variance: KES ${d.variance}` : '';
+                      showToast(`${staff.name} clocked out.${varianceMsg}`, 'success');
+                      fetchStaff();
+                    }
+                  } catch { showToast('Clock out failed', 'error'); }
+                }} className="w-full py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-sm font-medium hover:opacity-90 transition">
+                  Clock Out
+                </button>
+              ) : (
+                <button onClick={async () => {
+                  try {
+                    const r = await fetch('/api/staff', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: staff.id, action: 'clock_in', businessId, openingCash: 5000 }) });
+                    const d = await r.json();
+                    if (d.success) { showToast(`${staff.name} clocked in`, 'success'); fetchStaff(); }
+                  } catch { showToast('Clock in failed', 'error'); }
+                }} className="w-full py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm font-medium hover:opacity-90 transition">
+                  Clock In
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Shift History & Cash Variance */}
+      {shiftHistory && shiftHistory.analytics && (
+        <div className="space-y-4">
+          <h3 className="font-bold text-lg flex items-center gap-2"><Clock className="w-5 h-5 text-primary" /> Shift History</h3>
+          
+          {/* Variance Alert */}
+          {Math.abs(shiftHistory.analytics.avgVariance) > 50 && (
+            <div className={`rounded-xl p-4 flex items-center gap-3 ${shiftHistory.analytics.avgVariance < 0 ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'}`}>
+              <AlertTriangle className={`w-5 h-5 shrink-0 ${shiftHistory.analytics.avgVariance < 0 ? 'text-red-500' : 'text-amber-500'}`} />
+              <div>
+                <p className="font-semibold text-sm">Average Cash Variance: KES {shiftHistory.analytics.avgVariance}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {shiftHistory.analytics.shortShifts} shifts short, {shiftHistory.analytics.overShifts} shifts over. 
+                  Consistent shortages may indicate cash handling issues.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Staff Performance Table */}
+          {shiftHistory.analytics.staffPerformance.length > 0 && (
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="p-4 border-b border-border"><p className="font-semibold text-sm">Staff Performance</p></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50"><tr><th className="px-4 py-2 text-left text-xs text-muted-foreground">Staff</th><th className="px-4 py-2 text-right text-xs text-muted-foreground">Shifts</th><th className="px-4 py-2 text-right text-xs text-muted-foreground">Total Sales</th><th className="px-4 py-2 text-right text-xs text-muted-foreground">Avg Variance</th></tr></thead>
+                  <tbody>
+                    {shiftHistory.analytics.staffPerformance.map((sp: any) => (
+                      <tr key={sp.staffId} className="border-t border-border hover:bg-muted/30 transition">
+                        <td className="px-4 py-2.5 font-medium">{sp.name}</td>
+                        <td className="px-4 py-2.5 text-right">{sp.shifts}</td>
+                        <td className="px-4 py-2.5 text-right">{formatCurrency(sp.totalSales)}</td>
+                        <td className={`px-4 py-2.5 text-right font-medium ${sp.avgVariance < -50 ? 'text-red-600 dark:text-red-400' : sp.avgVariance > 50 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          {sp.avgVariance < 0 ? '' : '+'}KES {sp.avgVariance}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Recent Shifts */}
+          <div className="space-y-2">
+            {shiftHistory.shifts.slice(0, 5).map((shift: any) => (
+              <div key={shift.id} className="bg-card border border-border rounded-xl p-4 card-interactive">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+                      {shift.staff?.name?.split(' ').map((n: string) => n[0]).join('') || '?'}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{shift.staff?.name || 'Unknown'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(shift.clockIn).toLocaleString()} → {shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Active'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-sm">{formatCurrency(shift.totalSales)}</p>
+                    {shift.cashVariance != null && (
+                      <p className={`text-xs font-medium ${(shift.cashVariance || 0) < -50 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        Variance: {shift.cashVariance < 0 ? '' : '+'}KES {Math.round(shift.cashVariance)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* New Staff Modal */}
+      {showNewStaff && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewStaff(false)}>
+          <div className="bg-card rounded-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">Add Staff Member</h3><button onClick={() => setShowNewStaff(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+            <div className="space-y-3">
+              <div><label className="text-xs text-muted-foreground">Full Name</label><input type="text" value={newStaff.name} onChange={e => setNewStaff(s => ({ ...s, name: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+              <div><label className="text-xs text-muted-foreground">Phone</label><input type="tel" value={newStaff.phone} onChange={e => setNewStaff(s => ({ ...s, phone: e.target.value }))} placeholder="254712345678" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+              <div><label className="text-xs text-muted-foreground">4-Digit PIN</label><input type="password" value={newStaff.pin} onChange={e => setNewStaff(s => ({ ...s, pin: e.target.value }))} maxLength={4} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono text-center text-lg tracking-widest" /></div>
+              <div><label className="text-xs text-muted-foreground">Role</label>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  {['cashier', 'manager', 'owner'].map(role => (
+                    <button key={role} onClick={() => setNewStaff(s => ({ ...s, role }))} className={`py-2 text-xs rounded-lg border capitalize transition ${newStaff.role === role ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}>{role}</button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={async () => {
+                try {
+                  const r = await fetch('/api/staff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newStaff }) });
+                  const d = await r.json();
+                  if (!r.ok) throw new Error(d.error);
+                  setShowNewStaff(false); setNewStaff({ name: '', phone: '', pin: '', role: 'cashier' }); fetchStaff(); showToast(`${d.name} added!`, 'success');
+                } catch (err: any) { showToast(err.message, 'error'); }
+              }} className="w-full py-2.5 btn-primary rounded-lg text-sm">Add Staff Member</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ============================================
   // RENDER: M-PESA
   // ============================================
   const renderMpesa = () => {
@@ -1465,6 +1665,47 @@ export default function SokoniPOS() {
             )}
           </div>
         )}
+
+        {/* Audit Variance Detection */}
+        {auditVariance && auditVariance.variances && auditVariance.variances.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg flex items-center gap-2"><Shield className="w-5 h-5 text-primary" /> Audit Risk Detection</h3>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                auditVariance.auditRisk === 'low' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                auditVariance.auditRisk === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                auditVariance.auditRisk === 'high' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              }`}>
+                {auditVariance.auditRisk.toUpperCase()} AUDIT RISK
+              </span>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3">
+              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 dark:text-blue-400">KRA is now cross-referencing eTIMS data with Income Tax Returns. Variances between your eTIMS invoices and filed returns are the #1 audit trigger in 2026.</p>
+            </div>
+            <div className="space-y-3">
+              {auditVariance.variances.map((v: any, i: number) => (
+                <div key={i} className={`rounded-xl border p-4 transition hover:shadow-sm ${
+                  v.severity === 'critical' ? 'bg-red-50/50 dark:bg-red-900/10 border-red-200 dark:border-red-800' :
+                  v.severity === 'warning' ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' :
+                  'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {v.severity === 'critical' ? <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" /> :
+                     v.severity === 'warning' ? <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /> :
+                     <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />}
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{v.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{v.description}</p>
+                      <p className="text-xs font-medium mt-2 text-primary">{v.risk}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1624,6 +1865,7 @@ export default function SokoniPOS() {
           {currentView === 'products' && renderProducts()}
           {currentView === 'suppliers' && renderSuppliers()}
           {currentView === 'customers' && renderCustomers()}
+          {currentView === 'staff' && renderStaff()}
           {currentView === 'mpesa' && renderMpesa()}
           {currentView === 'reports' && renderReports()}
           {currentView === 'expense-check' && renderExpenseCheck()}
