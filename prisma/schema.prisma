@@ -46,6 +46,9 @@ model Business {
   settings      Settings[]
   staff         Staff[]
   branches     Branch[]
+  loyaltyMembers LoyaltyMember[]
+  customerDebts CustomerDebt[]
+  dailyReports  DailyReport[]
 }
 
 model Product {
@@ -489,5 +492,106 @@ model Branch {
 
   business     Business @relation(fields: [businessId], references: [id])
 
+  @@index([businessId])
+}
+
+// ============================================
+// LOYALTY PROGRAM (Growth & Pro Tier)
+// ============================================
+
+model LoyaltyMember {
+  id            String   @id @default(cuid())
+  businessId    String
+  customerId    String?                     // Link to customer if exists
+  name          String
+  phone         String                      // Primary identifier (like Bonga Points)
+  points        Int      @default(0)
+  totalSpent    Float    @default(0)
+  tier          String   @default("bronze")  // bronze | silver | gold
+  isActive      Boolean  @default(true)
+  joinedAt      DateTime @default(now())
+  lastVisitAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business     Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, phone])
+  @@index([businessId])
+}
+
+// ============================================
+// CUSTOMER DEBT LEDGER (Critical for Kenya)
+// Shopkeepers sell on credit — must track who owes what
+// ============================================
+
+model CustomerDebt {
+  id            String   @id @default(cuid())
+  businessId    String
+  customerId    String?                     // Optional link to customer
+  customerName  String
+  customerPhone String?
+  description   String                      // What was bought on credit
+  originalAmount Float                      // Amount owed
+  paidAmount    Float    @default(0)         // Amount paid back
+  balance       Float                        // Remaining = original - paid
+  dueDate       DateTime?                   // When they promised to pay
+  status        String   @default("outstanding") // outstanding | partial | settled | overdue
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business     Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, status])
+  @@index([businessId, customerPhone])
+}
+
+// ============================================
+// DAILY REPORT / Z-REPORT
+// End-of-day cash-up summary
+// ============================================
+
+model DailyReport {
+  id            String   @id @default(cuid())
+  businessId    String
+  branchId      String?
+  date          DateTime                    // The date this report covers
+  staffId       String?                     // Who closed the day
+
+  // Sales summary
+  totalSales    Float    @default(0)
+  totalVat      Float    @default(0)
+  invoiceCount  Int      @default(0)
+  cashSales     Float    @default(0)
+  mpesaSales    Float    @default(0)
+  bankSales     Float    @default(0)
+  creditSales   Float    @default(0)
+  refunds       Float    @default(0)
+  discounts     Float    @default(0)
+
+  // Cash drawer
+  openingCash   Float    @default(0)
+  closingCash   Float    @default(0)
+  cashVariance  Float    @default(0)
+
+  // Expenses paid out
+  expensesPaid  Float    @default(0)
+
+  // Debt tracking
+  newDebts      Float    @default(0)        // New credit extended
+  debtsCollected Float   @default(0)        // Old debts collected
+
+  // Profit estimate
+  costOfGoods   Float    @default(0)
+  grossProfit   Float    @default(0)
+
+  notes         String?
+  isClosed      Boolean  @default(false)     // Day closed?
+  createdAt     DateTime @default(now())
+
+  business     Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, date])
   @@index([businessId])
 }

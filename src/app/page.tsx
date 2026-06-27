@@ -222,6 +222,23 @@ export default function SokoniPOS() {
   // Audit variance state
   const [auditVariance, setAuditVariance] = useState<any>(null);
 
+  // Customer debt state
+  const [customerDebts, setCustomerDebts] = useState<any>(null);
+  const [showNewDebt, setShowNewDebt] = useState(false);
+  const [newDebt, setNewDebt] = useState({ customerName: '', customerPhone: '', description: '', originalAmount: '', dueDate: '', notes: '' });
+  const [showDebtPayment, setShowDebtPayment] = useState<string | null>(null);
+  const [debtPaymentAmount, setDebtPaymentAmount] = useState('');
+
+  // Loyalty state
+  const [loyaltyData, setLoyaltyData] = useState<any>(null);
+  const [showNewMember, setShowNewMember] = useState(false);
+  const [newMember, setNewMember] = useState({ name: '', phone: '' });
+
+  // Daily report state
+  const [dailyReport, setDailyReport] = useState<any>(null);
+  const [showCloseDay, setShowCloseDay] = useState(false);
+  const [closeDayCash, setCloseDayCash] = useState('');
+
   // Credit note modal state
   const [showCreditNote, setShowCreditNote] = useState(false);
   const [creditNoteInvoice, setCreditNoteInvoice] = useState<Invoice | null>(null);
@@ -259,10 +276,13 @@ export default function SokoniPOS() {
   const fetchStaff = useCallback(async () => { if (!businessId) return; try { setStaffList(await (await fetch(`/api/staff?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
   const fetchShifts = useCallback(async () => { if (!businessId) return; try { setShiftHistory(await (await fetch(`/api/staff/shifts?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
   const fetchAuditVariance = useCallback(async () => { if (!businessId) return; try { setAuditVariance(await (await fetch(`/api/compliance/audit-variance?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+  const fetchDebts = useCallback(async () => { if (!businessId) return; try { setCustomerDebts(await (await fetch(`/api/debts?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+  const fetchLoyalty = useCallback(async () => { if (!businessId) return; try { setLoyaltyData(await (await fetch(`/api/loyalty?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
+  const fetchDailyReport = useCallback(async () => { if (!businessId) return; try { setDailyReport(await (await fetch(`/api/daily-report?businessId=${businessId}`)).json()); } catch {} }, [businessId]);
 
   useEffect(() => {
     if (!businessId) return;
-    const f: Record<string, () => void> = { dashboard: async () => { fetchDashboard(); fetchAuditVariance(); }, pos: fetchProducts, invoices: () => fetchInvoices(), purchases: fetchPurchases, products: fetchProducts, suppliers: fetchSuppliers, customers: fetchCustomers, mpesa: fetchMpesa, reports: fetchDashboard, 'expense-check': async () => { await fetchDashboard(); try { const r = await fetch(`/api/expenses/validate?businessId=${businessId}`); const d = await r.json(); if (r.ok) setExpenseValidation(d); } catch {} try { const r = await fetch(`/api/compliance/health?businessId=${businessId}`); const d = await r.json(); if (r.ok) setComplianceHealth(d); } catch {} fetchAuditVariance(); }, staff: async () => { fetchStaff(); fetchShifts(); }, settings: () => {} };
+    const f: Record<string, () => void> = { dashboard: async () => { fetchDashboard(); fetchAuditVariance(); fetchDailyReport(); }, pos: fetchProducts, invoices: () => fetchInvoices(), purchases: fetchPurchases, products: fetchProducts, suppliers: fetchSuppliers, customers: async () => { fetchCustomers(); fetchDebts(); fetchLoyalty(); }, mpesa: fetchMpesa, reports: fetchDashboard, 'expense-check': async () => { await fetchDashboard(); try { const r = await fetch(`/api/expenses/validate?businessId=${businessId}`); const d = await r.json(); if (r.ok) setExpenseValidation(d); } catch {} try { const r = await fetch(`/api/compliance/health?businessId=${businessId}`); const d = await r.json(); if (r.ok) setComplianceHealth(d); } catch {} fetchAuditVariance(); }, staff: async () => { fetchStaff(); fetchShifts(); }, settings: () => {} };
     f[currentView]?.();
   }, [currentView, businessId, fetchDashboard, fetchProducts, fetchInvoices, fetchPurchases, fetchSuppliers, fetchCustomers, fetchMpesa]);
 
@@ -578,6 +598,7 @@ export default function SokoniPOS() {
           <button onClick={() => setCurrentView('invoices')} className="card-interactive flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-border"><FileText className="w-4 h-4 text-primary" /> New Invoice</button>
           <button onClick={() => setCurrentView('expense-check')} className="card-interactive flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-border"><Shield className="w-4 h-4 text-amber-500" /> Check Expense</button>
           <button onClick={async () => { await fetch('/api/kra/sync?action=process_queue&businessId=' + businessId, { method: 'POST' }); fetchDashboard(); showToast('Sync queue processed', 'success'); }} className="card-interactive flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-border"><RefreshCw className="w-4 h-4 text-primary" /> Sync KRA</button>
+          <button onClick={() => setShowCloseDay(true)} className="card-interactive flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-border"><Calendar className="w-4 h-4 text-primary" /> Close Day (Z-Report)</button>
         </div>
 
         {/* Hero: Compliance Score + Today's Performance */}
@@ -1115,8 +1136,179 @@ export default function SokoniPOS() {
   );
 
   // ============================================
-  // RENDER: STAFF & SHIFTS
+  // RENDER: CUSTOMER DEBT LEDGER
   // ============================================
+  const renderDebtLedger = () => {
+    if (!customerDebts) return null;
+    const { debts = [], totalOwed = 0, overdueCount = 0, overdueAmount = 0 } = customerDebts;
+    return (
+      <div className="space-y-4 mt-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg flex items-center gap-2"><DollarSign className="w-5 h-5 text-primary" /> Customer Debt Ledger</h3>
+          <button onClick={() => setShowNewDebt(true)} className="flex items-center gap-2 px-3 py-1.5 btn-primary rounded-lg text-xs"><Plus className="w-3.5 h-3.5" /> Record Debt</button>
+        </div>
+
+        {totalOwed > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="card-stat rounded-xl p-3"><p className="text-label">Total Owed</p><p className="text-xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalOwed)}</p></div>
+            <div className="card-stat rounded-xl p-3"><p className="text-label">Overdue</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{overdueCount}</p></div>
+            <div className="card-stat rounded-xl p-3"><p className="text-label">Overdue Amount</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(overdueAmount)}</p></div>
+            <div className="card-stat rounded-xl p-3"><p className="text-label">Active Debts</p><p className="text-xl font-bold">{debts.filter((d: any) => d.status !== 'settled').length}</p></div>
+          </div>
+        )}
+
+        {overdueCount > 0 && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
+            <p className="text-sm text-red-800 dark:text-red-300"><strong>{overdueCount}</strong> overdue debts totalling <strong>{formatCurrency(overdueAmount)}</strong>. Follow up with customers to collect.</p>
+          </div>
+        )}
+
+        {debts.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">No customer debts recorded. Click "Record Debt" when selling on credit.</p>
+        ) : (
+          <div className="space-y-2">
+            {debts.map((debt: any) => (
+              <div key={debt.id} className={`card-interactive rounded-xl p-4 ${
+                debt.status === 'overdue' ? 'border-red-300 dark:border-red-800' :
+                debt.status === 'settled' ? 'border-emerald-300 dark:border-emerald-800 opacity-60' : ''
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm">{debt.customerName}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                        debt.status === 'outstanding' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        debt.status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                        debt.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      }`}>{debt.status}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{debt.description} • {new Date(debt.createdAt).toLocaleDateString()}</p>
+                    {debt.customerPhone && <p className="text-xs text-muted-foreground">{debt.customerPhone}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-sm">{formatCurrency(debt.balance)}</p>
+                    <p className="text-xs text-muted-foreground">of {formatCurrency(debt.originalAmount)}</p>
+                    {debt.status !== 'settled' && (
+                      <button onClick={() => { setShowDebtPayment(debt.id); setDebtPaymentAmount(''); }}
+                        className="text-xs text-primary hover:underline font-medium mt-1">Record Payment</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* New Debt Modal */}
+        {showNewDebt && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewDebt(false)}>
+            <div className="bg-card rounded-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">Record Customer Debt</h3><button onClick={() => setShowNewDebt(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+              <div className="space-y-3">
+                <div><label className="text-xs text-muted-foreground">Customer Name</label><input type="text" value={newDebt.customerName} onChange={e => setNewDebt(d => ({ ...d, customerName: e.target.value }))} placeholder="e.g. John Kamau" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <div><label className="text-xs text-muted-foreground">Phone</label><input type="tel" value={newDebt.customerPhone} onChange={e => setNewDebt(d => ({ ...d, customerPhone: e.target.value }))} placeholder="254712345678" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <div><label className="text-xs text-muted-foreground">Description</label><input type="text" value={newDebt.description} onChange={e => setNewDebt(d => ({ ...d, description: e.target.value }))} placeholder="e.g. 2kg sugar + 1kg rice" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <div><label className="text-xs text-muted-foreground">Amount Owed (KES)</label><input type="number" value={newDebt.originalAmount} onChange={e => setNewDebt(d => ({ ...d, originalAmount: e.target.value }))} placeholder="0" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <div><label className="text-xs text-muted-foreground">Promised Payment Date</label><input type="date" value={newDebt.dueDate} onChange={e => setNewDebt(d => ({ ...d, dueDate: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <button onClick={async () => {
+                  try { const r = await fetch('/api/debts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newDebt, originalAmount: parseFloat(newDebt.originalAmount) }) }); if (!r.ok) throw new Error((await r.json()).error); setShowNewDebt(false); setNewDebt({ customerName: '', customerPhone: '', description: '', originalAmount: '', dueDate: '', notes: '' }); fetchDebts(); showToast('Debt recorded!', 'success'); } catch (err: any) { showToast(err.message, 'error'); }
+                }} className="w-full py-2.5 btn-primary rounded-lg text-sm">Record Debt</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Debt Payment Modal */}
+        {showDebtPayment && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowDebtPayment(null)}>
+            <div className="bg-card rounded-2xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-lg mb-4">Record Payment</h3>
+              <div className="space-y-3">
+                <div><label className="text-xs text-muted-foreground">Payment Amount (KES)</label><input type="number" value={debtPaymentAmount} onChange={e => setDebtPaymentAmount(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <button onClick={async () => {
+                  try { const r = await fetch('/api/debts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDebtPayment, action: 'record_payment', amount: debtPaymentAmount }) }); const d = await r.json(); if (!d.success) throw new Error(d.error); setShowDebtPayment(null); fetchDebts(); showToast(`Payment of ${formatCurrency(d.paymentRecorded)} recorded!`, 'success'); } catch (err: any) { showToast(err.message, 'error'); }
+                }} className="w-full py-2.5 btn-primary rounded-lg text-sm">Record Payment</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================
+  // RENDER: LOYALTY PROGRAM
+  // ============================================
+  const renderLoyalty = () => {
+    if (!loyaltyData) return null;
+    const { members = [], totalMembers = 0, totalPointsOutstanding = 0, totalSpent = 0, tiers = {} } = loyaltyData;
+    return (
+      <div className="space-y-4 mt-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg flex items-center gap-2"><Zap className="w-5 h-5 text-primary" /> Loyalty Program</h3>
+          <button onClick={() => setShowNewMember(true)} className="flex items-center gap-2 px-3 py-1.5 btn-primary rounded-lg text-xs"><Plus className="w-3.5 h-3.5" /> Add Member</button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="card-stat rounded-xl p-3"><p className="text-label">Members</p><p className="text-xl font-bold">{totalMembers}</p></div>
+          <div className="card-stat rounded-xl p-3"><p className="text-label">Points Outstanding</p><p className="text-xl font-bold text-primary">{totalPointsOutstanding.toLocaleString()}</p></div>
+          <div className="card-stat rounded-xl p-3"><p className="text-label">Total Spent</p><p className="text-xl font-bold">{formatCurrency(totalSpent)}</p></div>
+          <div className="card-stat rounded-xl p-3"><p className="text-label">Gold Members</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{tiers.gold || 0}</p></div>
+        </div>
+
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 flex items-center gap-2">
+          <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+          <p className="text-xs text-blue-700 dark:text-blue-400">Earn 1 point per KES 100 spent. Redeem at KES 1 per point. Silver tier at KES 25k, Gold at KES 100k total spend.</p>
+        </div>
+
+        {members.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">No loyalty members yet. Add customers to start earning points!</p>
+        ) : (
+          <div className="space-y-2">
+            {members.map((member: any) => (
+              <div key={member.id} className="card-interactive rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                    member.tier === 'gold' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                    member.tier === 'silver' ? 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300' :
+                    'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                  }`}>
+                    {member.tier === 'gold' ? 'G' : member.tier === 'silver' ? 'S' : 'B'}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{member.name}</p>
+                    <p className="text-xs text-muted-foreground">{member.phone} • {member.tier}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-primary">{member.points.toLocaleString()} pts</p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(member.totalSpent)} spent</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* New Member Modal */}
+        {showNewMember && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowNewMember(false)}>
+            <div className="bg-card rounded-2xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">Add Loyalty Member</h3><button onClick={() => setShowNewMember(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button></div>
+              <div className="space-y-3">
+                <div><label className="text-xs text-muted-foreground">Name</label><input type="text" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <div><label className="text-xs text-muted-foreground">Phone</label><input type="tel" value={newMember.phone} onChange={e => setNewMember(m => ({ ...m, phone: e.target.value }))} placeholder="254712345678" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" /></div>
+                <button onClick={async () => {
+                  try { const r = await fetch('/api/loyalty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, ...newMember }) }); if (!r.ok) throw new Error((await r.json()).error); setShowNewMember(false); setNewMember({ name: '', phone: '' }); fetchLoyalty(); showToast('Loyalty member added!', 'success'); } catch (err: any) { showToast(err.message, 'error'); }
+                }} className="w-full py-2.5 btn-primary rounded-lg text-sm">Add Member</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
   const renderStaff = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1864,7 +2056,7 @@ export default function SokoniPOS() {
           {currentView === 'purchases' && renderPurchases()}
           {currentView === 'products' && renderProducts()}
           {currentView === 'suppliers' && renderSuppliers()}
-          {currentView === 'customers' && renderCustomers()}
+          {currentView === 'customers' && <>{renderCustomers()}{renderDebtLedger()}{renderLoyalty()}</>}
           {currentView === 'staff' && renderStaff()}
           {currentView === 'mpesa' && renderMpesa()}
           {currentView === 'reports' && renderReports()}
@@ -1876,6 +2068,57 @@ export default function SokoniPOS() {
       {renderWelcome()}
       {renderNotifications()}
       {renderCreditNoteModal()}
+
+      {/* Close Day / Z-Report Modal */}
+      {showCloseDay && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCloseDay(false)}>
+          <div className="bg-card rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg flex items-center gap-2"><Calendar className="w-5 h-5 text-primary" /> Close Day — Z-Report</h3>
+              <button onClick={() => setShowCloseDay(false)} className="p-1 hover:bg-muted rounded"><X className="w-5 h-5" /></button>
+            </div>
+            {dailyReport?.liveSummary && (
+              <div className="space-y-4">
+                <div className="bg-muted rounded-xl p-4 space-y-2">
+                  <h4 className="font-semibold text-sm mb-2">Today's Summary</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-muted-foreground">Total Sales:</span></div><div className="font-bold text-right">{formatCurrency(dailyReport.liveSummary.totalSales)}</div>
+                    <div><span className="text-muted-foreground">VAT Collected:</span></div><div className="font-bold text-right">{formatCurrency(dailyReport.liveSummary.totalVat)}</div>
+                    <div><span className="text-muted-foreground">Invoices:</span></div><div className="text-right">{dailyReport.liveSummary.invoiceCount}</div>
+                    <div><span className="text-muted-foreground">Cash:</span></div><div className="font-bold text-right">{formatCurrency(dailyReport.liveSummary.cashSales)}</div>
+                    <div><span className="text-muted-foreground">M-Pesa:</span></div><div className="font-bold text-right">{formatCurrency(dailyReport.liveSummary.mpesaSales)}</div>
+                    <div><span className="text-muted-foreground">Bank:</span></div><div className="text-right">{formatCurrency(dailyReport.liveSummary.bankSales)}</div>
+                    <div><span className="text-muted-foreground">Credit:</span></div><div className="text-right">{formatCurrency(dailyReport.liveSummary.creditSales)}</div>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Closing Cash Amount (KES)</label>
+                  <input type="number" value={closeDayCash} onChange={e => setCloseDayCash(e.target.value)} placeholder="Count cash in drawer..."
+                    className="w-full px-3 py-2.5 mt-1 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                  {closeDayCash && dailyReport.liveSummary.cashSales > 0 && (
+                    <p className={`text-xs mt-1 font-medium ${parseFloat(closeDayCash) < dailyReport.liveSummary.cashSales ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      Variance: {formatCurrency(parseFloat(closeDayCash) - dailyReport.liveSummary.cashSales)}
+                    </p>
+                  )}
+                </div>
+                <button onClick={async () => {
+                  try {
+                    const r = await fetch('/api/daily-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId, closingCash: closeDayCash, notes: '' }) });
+                    const d = await r.json();
+                    if (!d.success) throw new Error(d.error);
+                    setShowCloseDay(false);
+                    const varMsg = d.variance !== 0 ? ` Cash variance: KES ${Math.round(d.variance)}` : '';
+                    showToast(`Day closed successfully!${varMsg}`, 'success');
+                    fetchDashboard();
+                  } catch (err: any) { showToast(err.message, 'error'); }
+                }} className="w-full py-3 btn-primary rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                  <CheckCircle className="w-5 h-5" /> Close Day & Generate Z-Report
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 ${toast.type === 'success' ? 'bg-emerald-600 text-white' : toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-amber-600 text-white'}`}>
