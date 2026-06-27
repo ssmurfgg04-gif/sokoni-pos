@@ -2,17 +2,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================
+   SOKONI POS — ENTERPRISE PREMIUM DESIGN SYSTEM
+   ============================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
+  --background: #fafbfc;
+  --foreground: #0a0f1a;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #0a0f1a;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --popover-foreground: #0a0f1a;
   --primary: #059669;
   --primary-foreground: #ffffff;
+  --primary-light: #d1fae5;
   --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
+  --secondary-foreground: #0a0f1a;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --accent: #f0fdf4;
@@ -22,35 +27,54 @@
   --border: #e2e8f0;
   --input: #e2e8f0;
   --ring: #059669;
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --success: #22c55e;
   --warning: #f59e0b;
   --info: #3b82f6;
+  --sidebar-bg: #f8fafc;
+  --sidebar-active: #059669;
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  --shadow-glow: 0 0 20px rgba(5, 150, 105, 0.15);
 }
 
 .dark {
-  --background: #0c1222;
-  --foreground: #f8fafc;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
-  --popover: #1e293b;
-  --popover-foreground: #f8fafc;
+  --background: #06080f;
+  --foreground: #f1f5f9;
+  --card: #0f1420;
+  --card-foreground: #f1f5f9;
+  --popover: #0f1420;
+  --popover-foreground: #f1f5f9;
   --primary: #34d399;
-  --primary-foreground: #0c1222;
-  --secondary: #334155;
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
+  --primary-foreground: #06080f;
+  --primary-light: #064e3b;
+  --secondary: #1e293b;
+  --secondary-foreground: #f1f5f9;
+  --muted: #151c2c;
+  --muted-foreground: #7c8db5;
   --accent: #064e3b;
   --accent-foreground: #34d399;
   --destructive: #f87171;
-  --destructive-foreground: #0c1222;
-  --border: #334155;
-  --input: #334155;
+  --destructive-foreground: #06080f;
+  --border: #1e293b;
+  --input: #1e293b;
   --ring: #34d399;
   --success: #4ade80;
   --warning: #fbbf24;
   --info: #60a5fa;
+  --sidebar-bg: #0a0e1a;
+  --sidebar-active: #34d399;
+  --glass: rgba(15, 20, 32, 0.7);
+  --glass-border: rgba(30, 41, 59, 0.5);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 25px rgba(52, 211, 153, 0.2);
 }
 
 * {
@@ -61,30 +85,36 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* ============================================
+   PREMIUM SCROLLBAR
+   ============================================ */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--muted);
-  border-radius: 3px;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--muted-foreground);
-  border-radius: 3px;
+  border-radius: 10px;
+  opacity: 0.5;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--foreground);
+  background: var(--primary);
 }
 
-/* POS specific styles */
+/* ============================================
+   POS SPECIFIC STYLES
+   ============================================ */
 .pos-grid {
   display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 1rem;
+  grid-template-columns: 1fr 420px;
+  gap: 1.25rem;
   height: calc(100vh - 140px);
 }
 
@@ -95,7 +125,66 @@ body {
   }
 }
 
-/* Receipt-like invoice styling */
+/* ============================================
+   GLASS CARD EFFECTS
+   ============================================ */
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-card-strong {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+/* ============================================
+   PREMIUM CARD STYLES
+   ============================================ */
+.card-interactive {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-interactive:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.card-interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Stat cards with colored top border */
+.card-stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--info));
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* ============================================
+   RECEIPT STYLING
+   ============================================ */
 .invoice-receipt {
   font-family: 'Courier New', monospace;
   border: 2px dashed var(--border);
@@ -104,7 +193,9 @@ body {
   margin: 0 auto;
 }
 
-/* Status badges */
+/* ============================================
+   STATUS BADGES — PREMIUM
+   ============================================ */
 .status-synced { background: #dcfce7; color: #166534; }
 .status-queued { background: #fef3c7; color: #92400e; }
 .status-syncing { background: #dbeafe; color: #1e40af; }
@@ -119,26 +210,40 @@ body {
 .dark .status-draft { background: #1f2937; color: #9ca3af; }
 .dark .status-cancelled { background: #1f2937; color: #6b7280; }
 
-/* Sidebar active state */
+/* ============================================
+   SIDEBAR — PREMIUM
+   ============================================ */
 .nav-item-active {
-  background: var(--accent);
-  color: var(--accent-foreground);
+  background: linear-gradient(135deg, var(--primary), #0d9488);
+  color: var(--primary-foreground);
   font-weight: 600;
+  border-radius: 0.625rem;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
 }
 
-/* Compliance traffic light */
+.dark .nav-item-active {
+  box-shadow: 0 2px 8px rgba(52, 211, 153, 0.25);
+}
+
+/* ============================================
+   COMPLIANCE TRAFFIC LIGHT
+   ============================================ */
 .compliance-good { color: var(--success); }
 .compliance-warning { color: var(--warning); }
 .compliance-critical { color: var(--destructive); }
 
-/* Print styles for receipts */
+/* ============================================
+   PRINT STYLES
+   ============================================ */
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; left: 0; top: 0; }
 }
 
-/* Animated pulse for syncing status */
+/* ============================================
+   PREMIUM ANIMATIONS
+   ============================================ */
 @keyframes sync-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -147,21 +252,55 @@ body {
   animation: sync-pulse 1.5s ease-in-out infinite;
 }
 
-/* Smooth page transitions */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-in {
-  animation: fadeInUp 0.2s ease-out;
+  animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Card hover glow */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in-scale {
+  animation: fadeInScale 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Staggered animation delays for lists */
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 50ms; }
+.stagger-3 { animation-delay: 100ms; }
+.stagger-4 { animation-delay: 150ms; }
+.stagger-5 { animation-delay: 200ms; }
+.stagger-6 { animation-delay: 250ms; }
+
+/* ============================================
+   HOVER GLOW
+   ============================================ */
 .hover-glow:hover {
-  box-shadow: 0 0 0 1px var(--primary), 0 4px 16px -2px rgba(5, 150, 105, 0.15);
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-glow);
 }
 
-/* Gradient text for emphasis */
+/* ============================================
+   GRADIENT TEXT
+   ============================================ */
 .gradient-text {
   background: linear-gradient(135deg, #059669, #0d9488);
   -webkit-background-clip: text;
@@ -169,19 +308,136 @@ body {
   background-clip: text;
 }
 
-/* Toast animation */
-@keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+.dark .gradient-text {
+  background: linear-gradient(135deg, #34d399, #2dd4bf);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* Progress bar shimmer */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+/* ============================================
+   PREMIUM METRIC INDICATOR
+   ============================================ */
+.metric-up {
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
 }
-.shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+
+.metric-down {
+  color: var(--destructive);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.dark .metric-up {
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.dark .metric-down {
+  background: rgba(248, 113, 113, 0.1);
+}
+
+/* ============================================
+   PREMIUM BUTTON STYLES
+   ============================================ */
+.btn-primary {
+  background: linear-gradient(135deg, #059669, #0d9488);
+  color: white;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  transition: all 0.2s;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+}
+
+.dark .btn-primary {
+  background: linear-gradient(135deg, #34d399, #2dd4bf);
+  color: #06080f;
+  box-shadow: 0 4px 14px rgba(52, 211, 153, 0.25);
+}
+
+.dark .btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(52, 211, 153, 0.35);
+}
+
+/* ============================================
+   SIDEBAR PREMIUM SEPARATOR
+   ============================================ */
+.sidebar-section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 0 0.75rem;
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ============================================
+   COMPLIANCE RING ANIMATION
+   ============================================ */
+@keyframes ring-fill {
+  from { stroke-dashoffset: var(--ring-circumference); }
+  to { stroke-dashoffset: var(--ring-offset); }
+}
+
+/* ============================================
+   DATA DENSITY HELPERS
+   ============================================ */
+.text-micro {
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  letter-spacing: 0.02em;
+}
+
+.text-label {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================
+   SPARKLINE (mini inline chart)
+   ============================================ */
+.sparkline-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ============================================
+   TOOLTIP STYLE OVERRIDES
+   ============================================ */
+[data-radix-tooltip-content] {
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ============================================
+   RESPONSIVE GRID HELPERS
+   ============================================ */
+.grid-auto-fit {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+@media (min-width: 768px) {
+  .grid-auto-fit {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
 }
